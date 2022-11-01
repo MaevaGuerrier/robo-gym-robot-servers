@@ -7,10 +7,14 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Int32MultiArray
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 from std_msgs.msg import Header, Bool
+from visualization_msgs.msg import Marker
 import copy
+import PyKDL
 from threading import Event
 from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_pb2
 import numpy as np
+
+
 class UrRosBridge:
 
     def __init__(self, real_robot=False, ur_model= 'ur10'):
@@ -24,12 +28,16 @@ class UrRosBridge:
         self.real_robot = real_robot
         self.ur_model = ur_model
 
+        self.target = [0.0] * 3
+
         # Joint States
         self.joint_names = ['elbow_joint', 'shoulder_lift_joint', 'shoulder_pan_joint', \
                             'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
         self.joint_position = dict.fromkeys(self.joint_names, 0.0)
         self.joint_velocity = dict.fromkeys(self.joint_names, 0.0)
         rospy.Subscriber("joint_states", JointState, self._on_joint_states)
+        # Target RViz Marker publisher
+        self.target_pub = rospy.Publisher('target_marker', Marker, latch=True, queue_size=10)
 
         # Robot control
         self.arm_cmd_pub = rospy.Publisher('env_arm_command', JointTrajectory, queue_size=1) # joint_trajectory_command_handler publisher
@@ -48,7 +56,10 @@ class UrRosBridge:
         self.tf2_listener = tf2_ros.TransformListener(self.tf2_buffer)
         self.static_tf2_broadcaster = tf2_ros.StaticTransformBroadcaster()
 
-        # Collision detection 
+        # Reference frame for Path
+        self.path_frame = 'base_link'
+
+        # Collision detection
         if not self.real_robot:
             rospy.Subscriber("shoulder_collision", ContactsState, self._on_shoulder_collision)
             rospy.Subscriber("upper_arm_collision", ContactsState, self._on_upper_arm_collision)
@@ -95,7 +106,6 @@ class UrRosBridge:
         # Get environment state
         state =[]
         state_dict = {}
-
         if self.rs_mode == 'only_robot':
             # Joint Positions and Joint Velocities
             joint_position = copy.deepcopy(self.joint_position)
@@ -219,7 +229,11 @@ class UrRosBridge:
         return msg
 
     def set_state(self, state_msg):
-       
+        # Set target internal value
+        self.target = [state_msg.float_params['object_0_x'], state_msg.float_params['object_0_y'], state_msg.float_params['object_0_z']]
+        # Publish Target Marker
+        self.publish_target_marker(self.target)
+
         if all (j in state_msg.state_dict for j in ('base_joint_position','shoulder_joint_position', 'elbow_joint_position', \
                                                      'wrist_1_joint_position', 'wrist_2_joint_position', 'wrist_3_joint_position')):
             state_dict = True
@@ -268,6 +282,33 @@ class UrRosBridge:
 
         return 1
 
+    def publish_target_marker(self, target_pose):
+        # Publish Target RViz Marker
+        t_marker = Marker()
+        t_marker.type = 2  # =>SPHERE
+        t_marker.scale.x = 0.15
+        t_marker.scale.y = 0.15
+        t_marker.scale.z = 0.15
+        t_marker.action = 0
+        t_marker.frame_locked = 1
+        t_marker.pose.position.x = target_pose[0]
+        t_marker.pose.position.y = target_pose[1]
+        t_marker.pose.position.z = target_pose[2]
+        rpy_orientation = PyKDL.Rotation.RPY(0.0, 0.0, target_pose[2])
+        q_orientation = rpy_orientation.GetQuaternion()
+        t_marker.pose.orientation.x = q_orientation[0]
+        t_marker.pose.orientation.y = q_orientation[1]
+        t_marker.pose.orientation.z = q_orientation[2]
+        t_marker.pose.orientation.w = q_orientation[3]
+        t_marker.id = 0
+        t_marker.header.stamp = rospy.Time.now()
+        t_marker.header.frame_id = self.path_frame
+        t_marker.color.a = 1.0
+        t_marker.color.r = 0.0  # red
+        t_marker.color.g = 1.0
+        t_marker.color.b = 0.0
+        self.target_pub.publish(t_marker)
+
     def send_action(self, action):
 
         if self.action_mode == 'abs_pos':
@@ -283,6 +324,7 @@ class UrRosBridge:
         """        
 
         position_reached = False
+
         while not position_reached:
             self.publish_env_arm_cmd(goal_joint_position)
             self.get_state_event.clear()
