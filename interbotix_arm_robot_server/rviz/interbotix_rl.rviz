@@ -120,7 +120,7 @@ Visualization Manager:
           Show Trail: false
           Value: true
       Name: RobotModel
-      Robot Description: robot_description
+      Robot Description: rx150/robot_description
       TF Prefix: ""
       Update Interval: 0
       Value: true
@@ -164,7 +164,7 @@ Visualization Manager:
           Value: true
         wrist_3_link:
           Value: true
-      Marker Scale: 1
+      Marker Scale: 0.5
       Name: TF
       Show Arrows: true
       Show Axes: true
