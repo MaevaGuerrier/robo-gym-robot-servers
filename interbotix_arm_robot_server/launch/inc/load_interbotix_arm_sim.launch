@@ -14,8 +14,8 @@
   <arg name="paused" default="true"/>
   <arg name="recording" default="false"/>
   <arg name="use_sim_time" default="true"/>
-  <arg name="use_position_controllers" default="true"/>
-  <arg name="use_trajectory_controllers" default="false"/>
+  <arg name="use_position_controllers" default="false"/>
+  <arg name="use_trajectory_controllers" default="true"/>
   <arg name="dof" default="5"/>
   <env name="GAZEBO_RESOURCE_PATH" value="$(find interbotix_xsarm_gazebo)"/>
 

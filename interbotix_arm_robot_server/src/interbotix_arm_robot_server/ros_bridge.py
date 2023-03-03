@@ -29,27 +29,32 @@ class InterbotixArmRosBridge:
         self.robot_model = robot_model
 
         self.target = [0.0] * 3
-
         # Joint States
-        if robot_model == 'rx150' or 'wx250' or 'px150' or 'rx200' or 'vx250' or 'vx300' or 'wx200' or 'wx250':
+        if robot_model == 'rx150' or robot_model == 'wx250' or robot_model == 'px150' or robot_model == 'rx200' or robot_model == 'vx250' or robot_model == 'vx300' or robot_model == 'wx200' or robot_model == 'wx250':
             self.dof = 5
         elif robot_model == 'px100':
             self.dof = 4
-        elif robot_model == 'vx300s' or 'wx250s':
+        elif robot_model == 'vx300s' or robot_model == 'wx250s':
             self.dof = 6
         else:
             self.dof = 5
-
         if self.dof == 4:
             self.joint_names = ['waist', 'shoulder', 'elbow', 'wrist_angle']
+            self.joint_position_names = ['base_joint_position', 'shoulder_joint_position', 'elbow_joint_position',
+                                         'wrist_angle_joint_position']
         elif self.dof == 5:
             self.joint_names = ['waist', 'shoulder', 'elbow', 'wrist_angle', 'wrist_rotate']
+            self.joint_position_names = ['base_joint_position', 'shoulder_joint_position', 'elbow_joint_position',
+                                         'wrist_angle_joint_position', 'wrist_rotate_joint_position']
         elif self.dof == 6:
             self.joint_names = ['waist', 'shoulder', 'elbow', 'forearm_roll', 'wrist_angle', 'wrist_rotate']
+            self.joint_position_names = ['base_joint_position', 'shoulder_joint_position', 'elbow_joint_position',
+                                         'forearm_roll_joint_position', 'wrist_angle_joint_position',
+                                         'wrist_rotate_joint_position']
 
         self.joint_position = dict.fromkeys(self.joint_names, 0.0)
         self.joint_velocity = dict.fromkeys(self.joint_names, 0.0)
-        rospy.Subscriber("joint_states", JointState, self._on_joint_states)
+        rospy.Subscriber(robot_model + "/joint_states", JointState, self._on_joint_states)
         # Target RViz Marker publisher
         self.target_pub = rospy.Publisher('target_marker', Marker, latch=True, queue_size=10)
 
@@ -181,7 +186,7 @@ class InterbotixArmRosBridge:
         # Publish Target Marker
         self.publish_target_marker(self.target)
 
-        if all (j in state_msg.state_dict for j in (self.joint_names)):
+        if all(j in state_msg.state_dict for j in self.joint_position_names):
             state_dict = True
         else:
             state_dict = False 
@@ -264,7 +269,6 @@ class InterbotixArmRosBridge:
         self.target_pub.publish(t_marker)
 
     def send_action(self, action):
-
         if self.action_mode == 'abs_pos':
             executed_action = self.publish_env_arm_cmd(action)
         
@@ -295,7 +299,7 @@ class InterbotixArmRosBridge:
         msg = JointTrajectory()
         msg.header = Header()
         msg.joint_names = self.joint_names
-        msg.points=[JointTrajectoryPoint()]
+        msg.points = [JointTrajectoryPoint()]
         msg.points[0].positions = position_cmd
         dur = []
         for idx, name in enumerate(msg.joint_names):
@@ -388,16 +392,16 @@ class InterbotixArmRosBridge:
             d['base_joint_position'] = joint_position['waist']
             d['shoulder_joint_position'] = joint_position['shoulder']
             d['elbow_joint_position'] = joint_position['elbow']
-            d['wrist_angle_position'] = joint_position['wrist_angle']
+            d['wrist_angle_joint_position'] = joint_position['wrist_angle']
             d['base_joint_velocity'] = joint_velocity['waist']
             d['shoulder_joint_velocity'] = joint_velocity['shoulder']
             d['elbow_joint_velocity'] = joint_velocity['elbow']
             d['wrist_angle_joint_velocity'] = joint_velocity['wrist_angle']
         if self.dof >= 5:
-            d['wrist_rotate_position'] = joint_position['wrist_rotate']
+            d['wrist_rotate_joint_position'] = joint_position['wrist_rotate']
             d['wrist_rotate_joint_velocity'] = joint_velocity['wrist_rotate']
         if self.dof >= 6:
-            d['forearm_roll_position'] = joint_position['forearm_roll']
+            d['forearm_roll_joint_position'] = joint_position['forearm_roll']
             d['forearm_roll_joint_velocity'] = joint_velocity['forearm_roll']
         
         return d 
@@ -423,7 +427,6 @@ class InterbotixArmRosBridge:
                 transform.transform.rotation.w]
 
     def _get_joint_ordered_value_list(self, joint_values):
-        
         return [joint_values[name] for name in self.joint_names]
 
     def _get_joint_velocity_limits(self):

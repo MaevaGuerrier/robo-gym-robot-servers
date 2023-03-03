@@ -6,16 +6,18 @@ from queue import Queue
 class JointTrajectoryCH:
     def __init__(self):
         rospy.init_node('joint_trajectory_command_handler')
-        self.real_robot =  rospy.get_param("~real_robot")
+        self.real_robot = rospy.get_param("~real_robot")
         ac_rate = rospy.get_param("~action_cycle_rate")
         self.rate = rospy.Rate(ac_rate)
+
+        self.robot_model = rospy.get_param('/robot_server/robot_model')
 
         # Publisher to JointTrajectory robot controller
         if self.real_robot:
             # self.jt_pub = rospy.Publisher('/scaled_pos_traj_controller/command', JointTrajectory, queue_size=10)
-            self.jt_pub = rospy.Publisher('/scaled_pos_joint_traj_controller/command', JointTrajectory, queue_size=10)
+            self.jt_pub = rospy.Publisher('/pos_joint_traj_controller/command', JointTrajectory, queue_size=10)
         else:
-            self.jt_pub = rospy.Publisher('/eff_joint_traj_controller/command', JointTrajectory, queue_size=10)
+            self.jt_pub = rospy.Publisher(self.robot_model + '/arm_controller/command', JointTrajectory, queue_size=10)
 
         # Subscriber to JointTrajectory Command coming from Environment
         rospy.Subscriber('env_arm_command', JointTrajectory, self.callback_env_joint_trajectory, queue_size=1)

@@ -339,7 +339,7 @@ class UrRosBridge:
         msg = JointTrajectory()
         msg.header = Header()
         msg.joint_names = self.joint_names
-        msg.points=[JointTrajectoryPoint()]
+        msg.points = [JointTrajectoryPoint()]
         msg.points[0].positions = position_cmd
         dur = []
         for idx, name in enumerate(msg.joint_names):
@@ -445,7 +445,7 @@ class UrRosBridge:
 
     def _get_transform_dict(self, transform, transform_name):
 
-        d ={}
+        d = {}
         d[transform_name + '_translation_x'] = transform.transform.translation.x
         d[transform_name + '_translation_y'] = transform.transform.translation.y
         d[transform_name + '_translation_z'] = transform.transform.translation.z
