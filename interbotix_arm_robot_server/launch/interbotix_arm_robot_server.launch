@@ -45,7 +45,7 @@
     <!-- Robot Base position -->
     <arg name="x" default="0.0" doc="base_link coordinate with respect to the world frame"/>
     <arg name="y" default="0.0" doc="base_link coordinate with respect to the world frame"/>
-    <arg name="z" default="0.0" doc="base_link coordinate with respect to the world frame"/>
+    <arg name="z" default="0.1" doc="base_link coordinate with respect to the world frame"/>
     <arg name="roll" default="0.0" doc="base_link coordinate with respect to the world frame"/>
     <arg name="pitch" default="0.0" doc="base_link coordinate with respect to the world frame"/>
     <arg name="yaw" default="0.0" doc="base_link coordinate with respect to the world frame"/>

@@ -37,6 +37,94 @@
     <texture filename="package://interbotix_xsarm_descriptions/meshes/interbotix_black.png"/>
   </material>
 
+  <!-- Configure self collision properties per link -->
+  <gazebo reference="$(arg robot_name)/shoulder_link">
+    <selfCollide>true</selfCollide>
+  </gazebo>
+  <gazebo reference="$(arg robot_name)/upper_arm_link">
+    <selfCollide>true</selfCollide>
+  </gazebo>
+  <gazebo reference="$(arg robot_name)/forearm_link">
+    <selfCollide>true</selfCollide>
+  </gazebo>
+  <gazebo reference="$(arg robot_name)/wrist_link">
+    <selfCollide>true</selfCollide>
+  </gazebo>
+  <gazebo reference="$(arg robot_name)/gripper_link">
+    <selfCollide>true</selfCollide>
+  </gazebo>
+
+  <!-- Collision sensors on all links -->
+  <gazebo reference="$(arg robot_name)/shoulder_link">
+    <sensor name='$(arg robot_name)/shoulder_link_contact' type='contact'>
+      <update_rate> 50 </update_rate>
+      <always_on>true</always_on>
+        <contact>
+            <collision>$(arg robot_name)/shoulder_link_collision</collision>
+        </contact>
+        <plugin name="ros_bumper_0" filename="libgazebo_ros_bumper.so">
+          <bumperTopicName>shoulder_collision</bumperTopicName>
+          <frameName>$(arg robot_name)/shoulder_link</frameName>
+        </plugin>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="$(arg robot_name)/upper_arm_link">
+    <sensor name='$(arg robot_name)/upper_arm_link_contact' type='contact'>
+      <update_rate> 50 </update_rate>
+      <always_on>true</always_on>
+        <contact>
+            <collision>$(arg robot_name)/upper_arm_link_collision</collision>
+        </contact>
+        <plugin name="ros_bumper_1" filename="libgazebo_ros_bumper.so">
+          <bumperTopicName>upper_arm_collision</bumperTopicName>
+          <frameName>$(arg robot_name)/upper_arm_link</frameName>
+        </plugin>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="$(arg robot_name)/forearm_link">
+    <sensor name='$(arg robot_name)/forearm_link_contact' type='contact'>
+      <update_rate> 50 </update_rate>
+      <always_on>true</always_on>
+        <contact>
+            <collision>$(arg robot_name)/forearm_link_collision</collision>
+        </contact>
+        <plugin name="ros_bumper_2" filename="libgazebo_ros_bumper.so">
+          <bumperTopicName>forearm_collision</bumperTopicName>
+	      <frameName>$(arg robot_name)/forearm_link</frameName>
+        </plugin>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="$(arg robot_name)/wrist_link">
+    <sensor name='$(arg robot_name)/wrist_link_contact' type='contact'>
+      <update_rate> 50 </update_rate>
+      <always_on>true</always_on>
+        <contact>
+            <collision>$(arg robot_name)/wrist_link_collision</collision>
+        </contact>
+        <plugin name="ros_bumper_3" filename="libgazebo_ros_bumper.so">
+          <bumperTopicName>wrist_collision</bumperTopicName>
+          <frameName>$(arg robot_name)/wrist_link</frameName>
+        </plugin>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="$(arg robot_name)/gripper_link">
+    <sensor name='$(arg robot_name)/gripper_link_contact' type='contact'>
+      <update_rate> 50 </update_rate>
+      <always_on>true</always_on>
+        <contact>
+            <collision>$(arg robot_name)/gripper_link_collision</collision>
+        </contact>
+        <plugin name="ros_bumper_4" filename="libgazebo_ros_bumper.so">
+          <bumperTopicName>gripper_collision</bumperTopicName>
+          <frameName>$(arg robot_name)/gripper_link</frameName>
+        </plugin>
+    </sensor>
+  </gazebo>
+
   <xacro:if value="$(arg use_world_frame)">
     <link name="world"/>
     <joint name="fixed" type="fixed">
@@ -94,7 +182,7 @@
       </geometry>
       <material name="interbotix_black"/>
     </visual>
-    <collision>
+    <collision name="$(arg robot_name)/shoulder_link_collision">
       <origin rpy="0 0 ${-pi/2}" xyz="0 0 0.0015"/>
       <geometry>
         <mesh filename="package://interbotix_xsarm_descriptions/meshes/rx150_meshes/rx150_2_shoulder.stl" scale="0.001 0.001 0.001"/>
@@ -134,7 +222,7 @@
       </geometry>
       <material name="interbotix_black"/>
     </visual>
-    <collision>
+    <collision name="$(arg robot_name)/upper_arm_link_collision">
       <origin rpy="0 0 ${pi/2}" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://interbotix_xsarm_descriptions/meshes/rx150_meshes/rx150_3_upper_arm.stl" scale="0.001 0.001 0.001"/>
@@ -174,7 +262,7 @@
       </geometry>
       <material name="interbotix_black"/>
     </visual>
-    <collision>
+    <collision name="$(arg robot_name)/forearm_link_collision">
       <origin rpy="0 0 ${pi/2}" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://interbotix_xsarm_descriptions/meshes/rx150_meshes/rx150_4_forearm.stl" scale="0.001 0.001 0.001"/>
@@ -214,7 +302,7 @@
       </geometry>
       <material name="interbotix_black"/>
     </visual>
-    <collision>
+    <collision name="$(arg robot_name)/wrist_link_collision">
       <origin rpy="0 0 ${pi/2}" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://interbotix_xsarm_descriptions/meshes/rx150_meshes/rx150_5_wrist.stl" scale="0.001 0.001 0.001"/>
@@ -254,7 +342,7 @@
       </geometry>
       <material name="interbotix_black"/>
     </visual>
-    <collision>
+    <collision name="$(arg robot_name)/gripper_link_collision">
       <origin rpy="0 0 ${pi/2}" xyz="-0.02 0 0"/>
       <geometry>
         <mesh filename="package://interbotix_xsarm_descriptions/meshes/rx150_meshes/rx150_6_gripper.stl" scale="0.001 0.001 0.001"/>

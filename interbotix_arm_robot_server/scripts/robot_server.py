@@ -40,6 +40,7 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
             rospy.logerr('Failed to send action and get state', exc_info=True)
             return robot_server_pb2.State(success=0)
 
+
 def serve():
     rospy.loginfo('Starting Interbotix Arm Robot Server...')
     server_port = rospy.get_param('~server_port')
