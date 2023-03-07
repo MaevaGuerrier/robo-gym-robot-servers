@@ -80,18 +80,30 @@ class InterbotixArmRosBridge:
 
         # Collision detection
         if not self.real_robot:
-            rospy.Subscriber("waist_collision", ContactsState, self._on_waist_collision)
-            rospy.Subscriber("shoulder_collision", ContactsState, self._on_shoulder_collision)
-            rospy.Subscriber("elbow_collision", ContactsState, self._on_elbow_collision)
-            rospy.Subscriber("forearm_roll_collision", ContactsState, self._on_forearm_roll_collision)
-            rospy.Subscriber("wrist_angle_collision", ContactsState, self._on_wrist_angle_collision)
-            rospy.Subscriber("wrist_rotate_collision", ContactsState, self._on_wrist_rotate_collision)
-
-        # Initialization of collision sensor flags
-        self.collision_sensors = dict.fromkeys(self.joint_names, False)
+            rospy.Subscriber(str(self.robot_model) + "/shoulder_collision", ContactsState,
+                             self._on_shoulder_collision)
+            rospy.Subscriber(str(self.robot_model) + "/upper_arm_collision", ContactsState,
+                             self._on_upper_arm_collision)
+            rospy.Subscriber(str(self.robot_model) + "/wrist_collision", ContactsState,
+                             self._on_wrist_collision)
+            rospy.Subscriber(str(self.robot_model) + "/gripper_collision", ContactsState,
+                             self._on_gripper_collision)
+            self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "wrist", "gripper"], False)
+            if self.dof == 6:
+                rospy.Subscriber(str(self.robot_model) + "/upper_forearm_collision", ContactsState,
+                                 self._on_upper_forearm_collision)
+                rospy.Subscriber(str(self.robot_model) + "/lower_forearm_collision", ContactsState,
+                                 self._on_lower_forearm_collision)
+                self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "upper_forearm", "lower_forearm",
+                                                        "wrist", "gripper"], False)
+            elif self.dof == 5:
+                rospy.Subscriber(str(self.robot_model) + "/forearm_collision", ContactsState,
+                                 self._on_forearm_collision)
+                self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "forearm", "wrist", "gripper"], False)
 
         # Robot Server mode
         rs_mode = rospy.get_param('~rs_mode')
+
         if rs_mode:
             self.rs_mode = rs_mode
         else:
@@ -124,8 +136,9 @@ class InterbotixArmRosBridge:
     def get_state(self):
         self.get_state_event.clear()
         # Get environment state
-        state =[]
+        state = []
         state_dict = {}
+
         if self.rs_mode == 'only_robot':
             # Joint Positions and Joint Velocities
             joint_position = copy.deepcopy(self.joint_position)
@@ -170,6 +183,37 @@ class InterbotixArmRosBridge:
             state += [interbotix_collision]
             state_dict['in_collision'] = float(interbotix_collision)
 
+        elif self.rs_mode == '1moving2points':
+            # Object 0 Pose
+            object_0_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.objects_frame[0],
+                                                              rospy.Time(0))
+            object_0_trans_list = self._transform_to_list(object_0_trans)
+            state += object_0_trans_list
+            state_dict.update(self._get_transform_dict(object_0_trans, 'object_0_to_ref'))
+
+            # Joint Positions and Joint Velocities
+            joint_position = copy.deepcopy(self.joint_position)
+            joint_velocity = copy.deepcopy(self.joint_velocity)
+            state += self._get_joint_ordered_value_list(joint_position)
+            state += self._get_joint_ordered_value_list(joint_velocity)
+            state_dict.update(self._get_joint_states_dict(joint_position, joint_velocity))
+
+            # ee to ref transform
+            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rospy.Time(0))
+            ee_to_ref_trans_list = self._transform_to_list(ee_to_ref_trans)
+            state += ee_to_ref_trans_list
+            state_dict.update(self._get_transform_dict(ee_to_ref_trans, 'ee_to_ref'))
+
+            # Collision sensors
+            interbotix_collision = any(self.collision_sensors.values())
+            state += [0]
+            state_dict['in_collision'] = float(0)
+
+            # forearm to ref transform
+            forearm_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, str(self.robot_model) + '/forearm_link', rospy.Time(0))
+            forearm_to_ref_trans_list = self._transform_to_list(forearm_to_ref_trans)
+            state += forearm_to_ref_trans_list
+            state_dict.update(self._get_transform_dict(forearm_to_ref_trans, 'forearm_to_ref'))
         else: 
             raise ValueError
                     
@@ -342,41 +386,47 @@ class InterbotixArmRosBridge:
                     self.joint_position[name] = msg.position[idx]
                     self.joint_velocity[name] = msg.velocity[idx]
 
-    def _on_waist_collision(self, data):
-        if data.states == []:
-            pass
-        else:
-            self.collision_sensors["waist"] = True
-
     def _on_shoulder_collision(self, data):
         if data.states == []:
             pass
         else:
             self.collision_sensors["shoulder"] = True
 
-    def _on_elbow_collision(self, data):
+    def _on_upper_arm_collision(self, data):
         if data.states == []:
             pass
         else:
-            self.collision_sensors["elbow"] = True
+            self.collision_sensors["upper_arm"] = True
 
-    def _on_forearm_roll_collision(self, data):
+    def _on_forearm_collision(self, data):
         if data.states == []:
             pass
         else:
-            self.collision_sensors["forearm_roll"] = True
+            self.collision_sensors["forearm"] = True
 
-    def _on_wrist_angle_collision(self, data):
+    def _on_upper_forearm_collision(self, data):
         if data.states == []:
             pass
         else:
-            self.collision_sensors["wrist_angle"] = True
+            self.collision_sensors["upper_forearm"] = True
 
-    def _on_wrist_rotate_collision(self, data):
+    def _on_lower_forearm_collision(self, data):
         if data.states == []:
             pass
         else:
-            self.collision_sensors["wrist_rotate"] = True
+            self.collision_sensors["lower_forearm"] = True
+
+    def _on_wrist_collision(self, data):
+        if data.states == []:
+            pass
+        else:
+            self.collision_sensors["wrist"] = True
+
+    def _on_gripper_collision(self, data):
+        if data.states == []:
+            pass
+        else:
+            self.collision_sensors["gripper"] = True
 
     def _on_occupancy_state(self, msg):
         if self.get_state_event.is_set():

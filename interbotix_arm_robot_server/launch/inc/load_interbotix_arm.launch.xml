@@ -25,7 +25,7 @@
   <arg name="camera1_link_pitch" default="0.0" doc="camera1_link coordinate with respect to the world frame"/>
   <arg name="camera1_link_yaw" default="0.0" doc="camera1_link coordinate with respect to the world frame"/>
 
-  <param name="$(arg robot_name)/robot_description" command="$(find xacro)/xacro '$(find interbotix_xsarm_descriptions)/urdf/$(arg robot_model).urdf.xacro'
+  <param name="$(arg robot_name)/robot_description" command="$(find xacro)/xacro '$(find interbotix_arm_robot_server)/urdf/$(arg robot_model).urdf.xacro'
     robot_name:=$(arg robot_name)
     base_link_frame:=$(arg base_link_frame)
     show_ar_tag:=$(arg show_ar_tag)
