@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import rospy
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
+from interbotix_xs_msgs.msg import JointGroupCommand
 from queue import Queue
 
 class JointTrajectoryCH:
@@ -14,8 +15,7 @@ class JointTrajectoryCH:
 
         # Publisher to JointTrajectory robot controller
         if self.real_robot:
-            # self.jt_pub = rospy.Publisher('/scaled_pos_traj_controller/command', JointTrajectory, queue_size=10)
-            self.jt_pub = rospy.Publisher('/pos_joint_traj_controller/command', JointTrajectory, queue_size=10)
+            self.jt_pub = rospy.Publisher(self.robot_model + '/commands/joint_group', JointGroupCommand, queue_size=10)
         else:
             self.jt_pub = rospy.Publisher(self.robot_model + '/arm_controller/command', JointTrajectory, queue_size=10)
 
@@ -40,13 +40,23 @@ class JointTrajectoryCH:
             # If a command from the environment is waiting to be executed,
             # publish the command, otherwise preempt trajectory
             if self.queue.full():
-                self.jt_pub.publish(self.queue.get())
+                if self.real_robot:
+                    trajectory = self.queue.get()
+                    command_msg = JointGroupCommand()
+                    command_msg.name = 'arm'
+                    command_msg.cmd = trajectory.points[0].positions
+                    self.jt_pub.publish(command_msg)
+                else:
+                    self.jt_pub.publish(self.queue.get())
                 self.stop_flag = False 
             else:
-                # If the empty JointTrajectory message has no been published publish it and
+                # If the empty JointTrajectory message has not been published, publish it and
                 # set the stop_flag to True, else pass
                 if not self.stop_flag:
-                    self.jt_pub.publish(JointTrajectory())
+                    if self.real_robot:
+                        self.jt_pub.publish(JointGroupCommand())
+                    else:
+                        self.jt_pub.publish(JointTrajectory())
                     self.stop_flag = True 
                 else: 
                     pass 

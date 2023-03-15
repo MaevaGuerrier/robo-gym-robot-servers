@@ -88,18 +88,21 @@ class InterbotixArmRosBridge:
                              self._on_wrist_collision)
             rospy.Subscriber(str(self.robot_model) + "/gripper_collision", ContactsState,
                              self._on_gripper_collision)
-            self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "wrist", "gripper"], False)
             if self.dof == 6:
                 rospy.Subscriber(str(self.robot_model) + "/upper_forearm_collision", ContactsState,
                                  self._on_upper_forearm_collision)
                 rospy.Subscriber(str(self.robot_model) + "/lower_forearm_collision", ContactsState,
                                  self._on_lower_forearm_collision)
-                self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "upper_forearm", "lower_forearm",
-                                                        "wrist", "gripper"], False)
             elif self.dof == 5:
                 rospy.Subscriber(str(self.robot_model) + "/forearm_collision", ContactsState,
                                  self._on_forearm_collision)
-                self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "forearm", "wrist", "gripper"], False)
+
+        self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "wrist", "gripper"], False)
+        if self.dof == 6:
+            self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "upper_forearm", "lower_forearm",
+                                                    "wrist", "gripper"], False)
+        elif self.dof == 5:
+            self.collision_sensors = dict.fromkeys(["shoulder", "upper_arm", "forearm", "wrist", "gripper"], False)
 
         # Robot Server mode
         rs_mode = rospy.get_param('~rs_mode')
@@ -226,7 +229,8 @@ class InterbotixArmRosBridge:
 
     def set_state(self, state_msg):
         # Set target internal value
-        self.target = [state_msg.float_params['object_0_x'], state_msg.float_params['object_0_y'], state_msg.float_params['object_0_z']]
+        self.target = [state_msg.float_params['object_0_x'], state_msg.float_params['object_0_y'],
+                       state_msg.float_params['object_0_z']]
         # Publish Target Marker
         self.publish_target_marker(self.target)
 
@@ -267,6 +271,7 @@ class InterbotixArmRosBridge:
                                             state_msg.state_dict['elbow_joint_position'], state_msg.state_dict['wrist_angle_joint_position']]
         else:
             goal_joint_position = state_msg.state[6:12]
+
         self.set_joint_position(goal_joint_position)
         
         if not self.real_robot:
@@ -333,7 +338,8 @@ class InterbotixArmRosBridge:
             self.publish_env_arm_cmd(goal_joint_position)
             self.get_state_event.clear()
             joint_position = copy.deepcopy(self.joint_position)
-            position_reached = np.isclose(goal_joint_position, self._get_joint_ordered_value_list(joint_position), atol=0.03).all()
+            position_reached = np.isclose(goal_joint_position, self._get_joint_ordered_value_list(joint_position),
+                                          atol=0.15).all()
             self.get_state_event.set()
 
     def publish_env_arm_cmd(self, position_cmd):
