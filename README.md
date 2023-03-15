@@ -20,6 +20,7 @@ We will try to maintain compatibility with ROS Melodic for as long as possible, 
 ## Robots currently implemented
 - MiR100
 - Universal Robots: UR3, UR3e, UR5, UR5e, UR10, UR10e, UR16
+- Interbotix X-series arms, 4DOF, 5DOF and 6DOF arms
 
 <br>
 
@@ -61,10 +62,14 @@ mkdir -p $ROBOGYM_WS/src && cd $ROBOGYM_WS/src && git clone https://github.com/j
 ```sh
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/mir_robot.git
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/universal_robot.git
+git clone https://github.com/montrealrobotics/ur_kinematics.git
 git clone -b v0.7.1-dev https://github.com/jr-robotics/franka_ros_interface
 git clone https://github.com/jr-robotics/franka_panda_description
 git clone -b ${ROS_DISTRO}-devel https://github.com/jr-robotics/panda_simulator
 git clone https://github.com/orocos/orocos_kinematics_dynamics
+git clone https://github.com/Interbotix/interbotix_ros_core.git
+git clone https://github.com/Interbotix/interbotix_ros_manipulators.git
+git clone https://github.com/Interbotix/interbotix_ros_toolboxes.git
 cd orocos_kinematics_dynamics && git checkout b35c424e77ebc5b7e6f1c5e5c34f8a4666fbf5bc
 cd $ROBOGYM_WS
 sudo apt-get update
