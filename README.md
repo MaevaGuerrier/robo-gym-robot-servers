@@ -80,13 +80,17 @@ catkin init
 source /opt/ros/$ROS_DISTRO/setup.bash
 catkin build
 pip3 install robo-gym-server-modules scipy numpy
-pip3 install --upgrade protobuf
+pip3 install protobuf==3.20
 ```
 
 6. Add the sourcing of ROS and the ROS workspace to your `.bashrc` file:
 ```sh
 printf "source /opt/ros/$ROS_DISTRO/setup.bash\nsource $ROBOGYM_WS/devel/setup.bash" >> ~/.bashrc
 ```
+
+Source the workspace in your current terminal:
+
+``` source $ROBOGYM_WS/devel/setup.bash ```
 
 ## Ubuntu 18.04 - ROS Melodic - Python 2
 
