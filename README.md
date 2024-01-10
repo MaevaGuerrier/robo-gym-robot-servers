@@ -59,6 +59,7 @@ mkdir -p $ROBOGYM_WS/src && cd $ROBOGYM_WS/src && git clone https://github.com/m
 
 
 5. Clone required packages, build the workspace and install required python modules
+  For the Interbotix packages, run the standard [install script](https://github.com/montrealrobotics/interbotix_ros_manipulators/blob/main/interbotix_ros_xsarms/install/xsarm_remote_install.sh) which will install all packages in a workspace called interbotix_ws, you can they overlay your robo-gym ws on top of this.
 ```sh
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/mir_robot.git
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/universal_robot.git
@@ -67,9 +68,6 @@ git clone -b v0.7.1-dev https://github.com/jr-robotics/franka_ros_interface
 git clone https://github.com/jr-robotics/franka_panda_description
 git clone -b ${ROS_DISTRO}-devel https://github.com/jr-robotics/panda_simulator
 git clone https://github.com/orocos/orocos_kinematics_dynamics
-git clone https://github.com/Interbotix/interbotix_ros_core.git
-git clone https://github.com/Interbotix/interbotix_ros_manipulators.git
-git clone https://github.com/Interbotix/interbotix_ros_toolboxes.git
 cd orocos_kinematics_dynamics && git checkout b35c424e77ebc5b7e6f1c5e5c34f8a4666fbf5bc
 cd $ROBOGYM_WS
 sudo apt-get update
