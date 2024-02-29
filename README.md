@@ -151,6 +151,26 @@ printf "source /opt/ros/$ROS_DISTRO/setup.bash\nsource $ROBOGYM_WS/devel/setup.b
 
 # How to use
 
+## Interbotix arms
+
+### Simulated Robot
+Simulated Robot Servers are handled by the Server Manager. If you want to manually start a Simulated Robot Server use:
+```
+roslaunch interbotix_arm_robot_server interbotix_arm_robot_server.launch gui:=true robot_model:=wx250s
+```
+Argument 'robot_model' can be any of the interbotic arm models.
+
+### Real Robot
+
+First, launch the robot arm control, for this, you should have previously installed the interbotix stack.
+```
+roslaunch interbotix_xsarm_control xsarm_control.launch robot_model:=wx250s
+```
+Then launch the robot server:
+```
+roslaunch interbotix_arm_robot_server interbotix_arm_robot_server.launch gui:=true robot_model:=wx250s real_robot:=true
+```
+
 ## MiR100
 
 ### Simulated Robot
