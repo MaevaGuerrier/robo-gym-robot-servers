@@ -59,7 +59,7 @@ mkdir -p $ROBOGYM_WS/src && cd $ROBOGYM_WS/src && git clone https://github.com/m
 
 
 5. Clone required packages, build the workspace and install required python modules
-  For the Interbotix packages, run the standard [install script](https://github.com/montrealrobotics/interbotix_ros_manipulators/blob/main/interbotix_ros_xsarms/install/xsarm_remote_install.sh) which will install all packages in a workspace called interbotix_ws, you can they overlay your robo-gym ws on top of this.
+  For the Interbotix packages, run the standard [install script](https://github.com/montrealrobotics/interbotix_ros_manipulators/blob/main/interbotix_ros_xsarms/install/amd64/xsarm_amd64_install.sh) which will install all packages in a workspace called interbotix_ws, you can they overlay your robo-gym ws on top of this.
 ```sh
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/mir_robot.git
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/universal_robot.git
