@@ -97,13 +97,28 @@
   <param name="real_robot" value="$(arg real_robot)"></param>
   <param name="reference_frame" value="$(arg reference_frame)"></param>
 
+  <group if="$(arg real_robot)">
     <!--Launch gRPC server -->
-  <node name="robot_server" pkg="interbotix_rover_robot_server" type="robot_server.py" respawn="false" output="screen">
-    <param name="server_port" value="$(arg server_port)"></param>
-    <param name="real_robot" value="$(arg real_robot)"></param>
-    <param name="robot_model" value="$(arg robot_model)"></param>
-    <param name="action_cycle_rate" value="$(arg action_cycle_rate)"></param>
-    <param name="reference_frame" value="$(arg reference_frame)"></param>
-  </node>
+    <node name="robot_server" pkg="interbotix_rover_robot_server" type="robot_server.py" respawn="false" output="screen">
+      <param name="server_port" value="$(arg server_port)"></param>
+      <param name="real_robot" value="$(arg real_robot)"></param>
+      <param name="robot_model" value="$(arg robot_model)"></param>
+      <param name="action_cycle_rate" value="$(arg action_cycle_rate)"></param>
+      <param name="reference_frame" value="$(arg reference_frame)"></param>
+      <remap from="/locobot/odom" to="/mobile_base/odom"/>
+      <remap from="/locobot/cmd_vel" to="/mobile_base/cmd_vel"/>
+    </node>
+  </group>
+
+  <group unless="$(arg real_robot)">
+    <!--Launch gRPC server -->
+    <node name="robot_server" pkg="interbotix_rover_robot_server" type="robot_server.py" respawn="false" output="screen">
+      <param name="server_port" value="$(arg server_port)"></param>
+      <param name="real_robot" value="$(arg real_robot)"></param>
+      <param name="robot_model" value="$(arg robot_model)"></param>
+      <param name="action_cycle_rate" value="$(arg action_cycle_rate)"></param>
+      <param name="reference_frame" value="$(arg reference_frame)"></param>
+    </node>
+  </group>
 
 </launch>

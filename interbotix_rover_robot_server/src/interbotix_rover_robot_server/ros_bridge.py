@@ -24,17 +24,21 @@ class InterbotixRoverRosBridge:
 
         self.real_robot = real_robot
         self.robot_model = robot_model
-        self.robot_name = 'locobot'
+        self.robot_name, arm_model = robot_model.split('_')
+        
+        if arm_model == 'wx250s':
+            self.dof = 6
+        elif arm_model == 'px100':
+            self.dof = 4
+        else:
+            self.dof = 5
         
         self.base_cmd_pub = rospy.Publisher(self.robot_name + '/cmd_vel', Twist, queue_size=1)
-        self.arm_cmd_pub = rospy.Publisher('env_arm_command', JointTrajectory, queue_size=1)
-        
-        
+        self.arm_cmd_pub = rospy.Publisher('/env_arm_command', JointTrajectory, queue_size=1)
+
         self.sleep_time = (1.0 / rospy.get_param("~action_cycle_rate")) - 0.01
         self.control_period = rospy.Duration.from_sec(self.sleep_time)
-        
-        self.dof = len(rospy.get_param(self.robot_name + '/arm_controller/joints'))
-        
+
         # Joint States
         if self.dof == 4:
             self.joint_names = ['waist', 'shoulder', 'elbow', 'wrist_angle']
@@ -153,6 +157,7 @@ class InterbotixRoverRosBridge:
             dur.append(max(abs(cmd-pos)/max_vel, self.min_traj_duration))
         msg.points[0].time_from_start = rospy.Duration.from_sec(max(dur))
         self.arm_cmd_pub.publish(msg)
+
         rospy.sleep(self.control_period)
         
         return position_cmd
