@@ -76,7 +76,7 @@ class InterbotixRoverRosBridge:
         joint_position = copy.deepcopy(self.joint_position)
         joint_velocity = copy.deepcopy(self.joint_velocity)
         
-        # apppend position and velocity as lists to state
+        # append position and velocity as lists to state
         state += self._get_joint_ordered_value_list(joint_position)
         state += self._get_joint_ordered_value_list(joint_velocity)
         
@@ -170,9 +170,6 @@ class InterbotixRoverRosBridge:
         
         rospy.sleep(self.control_period)
         
-        # msg.linear.x = 0
-        # msg.angular.z = 0
-        # self.base_cmd_pub.publish(msg)
         return goal
     
     def _on_joint_states(self, msg):
@@ -237,5 +234,3 @@ class InterbotixRoverRosBridge:
             raise ValueError('robot_model not recognized')
 
         return {name: absolute_joint_velocity_limits[name] for name in self.joint_names}
-
-        

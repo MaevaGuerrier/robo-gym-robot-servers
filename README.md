@@ -14,13 +14,13 @@ The `robo-gym-robot-servers` provide an interface to the Gazebo simulations and 
 
 Recommended System Setup: Ubuntu 20.04 - ROS Noetic - Python [>3.7]
 
-The packages have been tested for ROS Noetic and Melodic.
-We will try to maintain compatibility with ROS Melodic for as long as possible, nevertheless our main efforts will be based on ROS Noetic. 
+The packages have been tested for ROS Noetic.
 
 ## Robots currently implemented
 - MiR100
 - Universal Robots: UR3, UR3e, UR5, UR5e, UR10, UR10e, UR16
-- Interbotix X-series arms, 4DOF, 5DOF and 6DOF arms
+- Interbotix X-series arms: 4DOF, 5DOF and 6DOF arms
+- Interbotix locobots: create3 base version
 
 <br>
 
@@ -56,10 +56,22 @@ export ROS_DISTRO=noetic
 mkdir -p $ROBOGYM_WS/src && cd $ROBOGYM_WS/src && git clone https://github.com/montrealrobotics/robo-gym-robot-servers.git
 ```
 
-
-
 5. Clone required packages, build the workspace and install required python modules
-  For the Interbotix packages, run the standard [install script](https://github.com/montrealrobotics/interbotix_ros_manipulators/blob/main/interbotix_ros_xsarms/install/xsarm_remote_install.sh) which will install all packages in a workspace called interbotix_ws, you can they overlay your robo-gym ws on top of this.
+For the Interbotix packages, run the standard [arm install script](https://github.com/montrealrobotics/interbotix_ros_manipulators/blob/main/interbotix_ros_xsarms/install/xsarm_remote_install.sh) or [locobot install script](https://github.com/Interbotix/interbotix_ros_rovers/blob/main/interbotix_ros_xslocobots/install/xslocobot_remote_install.sh) which will install all packages in a workspace called interbotix_ws, you can then overlay your robo-gym ws on top of this.
+
+For the locobot workspace:
+
+```sh
+sudo apt install curl
+curl 'https://raw.githubusercontent.com/Interbotix/interbotix_ros_rovers/main/interbotix_ros_xslocobots/install/xslocobot_remote_install.sh' > xslocobot_remote_install.sh
+chmod +x xslocobot_remote_install.sh
+./xslocobot_remote_install.sh -d noetic -b create3 -p /home/user/interbotix_rover_ws
+
+```
+Once the workspace has build, source the devel/setup.bash before building your robogym workspace to create an overlay.
+
+If you want to use both the interbotix arms and rovers (locobots) you can also run the install script for the Interbotix arms. You can then overlay, interbotix_ws > interbotix_rover_ws > robogym_ws
+
 ```sh
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/mir_robot.git
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/universal_robot.git
@@ -90,65 +102,6 @@ Source the workspace in your current terminal:
 
 ``` source $ROBOGYM_WS/devel/setup.bash ```
 
-## Ubuntu 18.04 - ROS Melodic - Python 2
-
-<details>
-<summary>Click to expand</summary>
-<p>
-
-1.  Setup your computer to accept software from packages.ros.org
-```sh
-sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list' && sudo apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
-```
-
-2. Install the required packages
-```sh
-sudo apt-get update && sudo apt-get install apt-utils build-essential psmisc vim-gtk git swig sudo libcppunit-dev python-catkin-tools python-rosdep python-pip python-rospkg python-future
-```
-
-3. Open a new terminal and set the environment variables. Use the same terminal for all the installation steps. 
-```sh
-# Set robo-gym ROS workspace folder
-export ROBOGYM_WS=~/robogym_ws 
-# Set ROS distribution
-export ROS_DISTRO=melodic
-```
-
-4. Create a workspace folder in the home folder of your PC and clone this repository
-```sh
-mkdir -p $ROBOGYM_WS/src && cd $ROBOGYM_WS/src && git clone https://github.com/jr-robotics/robo-gym-robot-servers.git
-```
-
-5. Clone required packages, build the workspace and install required python modules
-```sh
-
-git clone -b $ROS_DISTRO https://github.com/jr-robotics/mir_robot.git
-git clone -b $ROS_DISTRO https://github.com/jr-robotics/universal_robot.git
-git clone -b v0.7.1-dev https://github.com/jr-robotics/franka_ros_interface
-git clone https://github.com/jr-robotics/franka_panda_description
-git clone -b ${ROS_DISTRO}-devel https://github.com/jr-robotics/panda_simulator
-git clone https://github.com/orocos/orocos_kinematics_dynamics
-cd orocos_kinematics_dynamics && git checkout b35c424e77ebc5b7e6f1c5e5c34f8a4666fbf5bc
-cd $ROBOGYM_WS
-sudo apt-get update
-sudo rosdep init
-rosdep update
-rosdep install --from-paths src -i -y --rosdistro $ROS_DISTRO
-catkin init
-source /opt/ros/$ROS_DISTRO/setup.bash
-catkin build
-pip install --upgrade pip
-pip install robo-gym-server-modules scipy numpy
-```
-
-6. Add the sourcing of ROS and the ROS workspace to your `.bashrc` file:
-```sh
-printf "source /opt/ros/$ROS_DISTRO/setup.bash\nsource $ROBOGYM_WS/devel/setup.bash" >> ~/.bashrc
-```
-
-</p>
-</details>  
-
 # How to use
 
 ## Interbotix arms
@@ -158,7 +111,7 @@ Simulated Robot Servers are handled by the Server Manager. If you want to manual
 ```
 roslaunch interbotix_arm_robot_server interbotix_arm_robot_server.launch gui:=true robot_model:=wx250s
 ```
-Argument 'robot_model' can be any of the interbotic arm models.
+Argument 'robot_model' can be any of the interbotix arm models.
 
 ### Real Robot
 
@@ -169,6 +122,34 @@ roslaunch interbotix_xsarm_control xsarm_control.launch robot_model:=wx250s
 Then launch the robot server:
 ```
 roslaunch interbotix_arm_robot_server interbotix_arm_robot_server.launch gui:=true robot_model:=wx250s real_robot:=true
+```
+
+## Interbotix rovers/locobots
+
+### Simulated Robot
+Simulated Robot Servers are handled by the Server Manager. If you want to manually start a Simulated Robot Server use:
+```
+roslaunch interbotix_rover_robot_server interbotix_rover_robot_server.launch gui:=true robot_model:=locobot_wx250s
+```
+Argument 'robot_model' can be any of the interbotix create3 base lobobot models.
+
+### Real Robot
+
+First, launch the locobot control on the locobot.
+```
+roslaunch interbotix_xslocobot_control xslocobot_control.launch use_base
+```
+The machine that you are running the robogym robot server on should be connected to the same network as the locobot.
+
+Set your ROS_MASTER_URI to the locobot's IP:
+
+```
+export ROS_MASTER_URI=http://<locobot ip>:11311
+```
+
+Then launch the robot server:
+```
+roslaunch interbotix_rover_robot_server interbotix_rover_robot_server.launch robot_model:=locobot_wx250s real_robot:=true
 ```
 
 ## MiR100
@@ -266,6 +247,22 @@ roslaunch ur_robot_server ur_robot_server.launch ur_model:=ur10 real_robot:=true
 # Troubleshooting
 
 The Robot Server uses the standard ROS logging system, you can find the latest log of the Robot Server at: `.ros/log/latest/robot_server-*.log`
+
+Troubleshooting problems with the robot servers can be tricky when using the server manager as launches are made in Tmux sessions. To view.
+After starting the server manager with:
+```
+start-server-manager
+```
+Connect to server manager socket:
+```
+tmux -L ServerManager
+```
+
+You can scroll through the windows by pressing, ctrl + b followed by 'w'. When you find the window where the robot server was launched, press enter to open it.
+Scrolling can be done with ctrl + b followed by '['.
+
+
+
 
 # Examples
 
