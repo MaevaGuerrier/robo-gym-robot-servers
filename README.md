@@ -65,7 +65,12 @@ chmod +x xslocobot_remote_install.sh
 ```
 Once the workspace has build, source the devel/setup.bash before building your robogym workspace to create an overlay.
 
-If you want to use both the interbotix arms and rovers (locobots) you can also run the install script for the Interbotix arms. You can then overlay, interbotix_ws > interbotix_rover_ws > robogym_ws
+If you want to use both the interbotix arms and rovers (locobots) you can also run the install script for the Interbotix arms. You can then overlay, interbotix_ws > interbotix_rover_ws > robogym_ws.
+By default all robot servers are not built, to build a server, remove the CATKIN_IGNORE file in the root directory of the robot server, i.e.
+```
+rm ~/robo-gym-robot-servers/interbotix_rover_robot_server/CATKIN_IGNORE
+```
+
 
 ```sh
 git clone -b $ROS_DISTRO https://github.com/jr-robotics/mir_robot.git
@@ -96,6 +101,28 @@ printf "source /opt/ros/$ROS_DISTRO/setup.bash\nsource $ROBOGYM_WS/devel/setup.b
 Source the workspace in your current terminal:
 
 ``` source $ROBOGYM_WS/devel/setup.bash ```
+
+# Docker
+To run the robo gym servers in a docker container.
+Build an image with the robot type that you are working with, robot type can be **interbotix_arm**, **interbotix_rover** or **ur**:
+```
+sudo docker build --build-arg ROBOT_TYPE=interbotix_rover -t robot_server .
+```
+
+```
+xhost +local:docker
+```
+
+Then run docker compose to start a container. You can start a container for a real robot or sim robot, by specifying the profile.
+For sim:
+```
+sudo docker compose --profile sim up
+```
+For real:
+```
+sudo docker compose --profile real up
+```
+For the real robot, launch args can be passed by editing the [docker-compose.yml](docker-compose.yml). For the real interbotix_rover (locobot) the ROS_MASTER_URI can be specified here also.
 
 # How to use
 
