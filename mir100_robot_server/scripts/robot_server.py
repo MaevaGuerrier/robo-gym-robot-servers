@@ -21,7 +21,8 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
         try:
             s = self.rosbridge.set_state(state_msg=request)
             return robot_server_pb2.Success(success=1)
-        except:
+        except Exception as ex:
+            rospy.logerr(str(ex))
             return robot_server_pb2.Success(success=0)
 
     def SendAction(self, request, context):
@@ -31,6 +32,12 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
         except:
             return robot_server_pb2.Success(success=0)
 
+    def SendActionGetState(self, request, context):
+        try:
+            lin_vel, ang_vel = self.rosbridge.publish_env_cmd_vel(request.action[0], request.action[1])
+            return self.rosbridge.get_state()
+        except:
+            return robot_server_pb2.State(success=0)
 
 def serve():
     server_port = rospy.get_param('~server_port')

@@ -14,7 +14,7 @@ The `robo-gym-robot-servers` provide an interface to the Gazebo simulations and 
 
 Recommended System Setup: Ubuntu 20.04 - ROS Noetic - Python [>3.7]
 
-The packages have been tested for ROS Noetic.
+The packages are being developed for ROS Noetic.
 
 ## Robots currently implemented
 - MiR100
