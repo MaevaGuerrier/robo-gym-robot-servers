@@ -36,8 +36,8 @@ class InterbotixRoverRosBridge:
         self.base_cmd_pub = rospy.Publisher(self.robot_name + '/cmd_vel', Twist, queue_size=1)
         self.arm_cmd_pub = rospy.Publisher('/env_arm_command', JointTrajectory, queue_size=1)
 
-        self.sleep_time = (1.0 / rospy.get_param("~action_cycle_rate")) - 0.01
-        self.control_period = rospy.Duration.from_sec(self.sleep_time)
+        control_rate_float = rospy.get_param("~action_cycle_rate", 125.0)
+        self.control_rate = rospy.Rate(control_rate_float)
 
         # Joint States
         if self.dof == 4:
@@ -112,7 +112,7 @@ class InterbotixRoverRosBridge:
         self.reset.set()
 
         for _ in range(20):
-            rospy.sleep(self.control_period)
+            self.control_rate.sleep()
 
         return 1
     
@@ -158,7 +158,7 @@ class InterbotixRoverRosBridge:
         msg.points[0].time_from_start = rospy.Duration.from_sec(max(dur))
         self.arm_cmd_pub.publish(msg)
 
-        rospy.sleep(self.control_period)
+        self.control_rate.sleep()
         
         return position_cmd
     
@@ -168,7 +168,7 @@ class InterbotixRoverRosBridge:
         msg.angular.z = goal[1]
         self.base_cmd_pub.publish(msg)
         
-        rospy.sleep(self.control_period)
+        self.control_rate.sleep()
         
         return goal
     

@@ -13,6 +13,7 @@
   <arg name="action_cycle_rate" default="25" doc="Rate at which new commands are published to the robot controller"/>
   <arg name="reference_frame" default="$(arg robot_model)/base_link"
        doc="Reference frame with respect to which target and ee pose are given"/>
+  <arg name="ee_frame" default="" doc="frame to use as the end effector" />
   <arg name="target_mode" default="only_robot" doc="DEPRECATED"/>
   <arg name="rs_mode" default="false"
        doc="Defines the working mode of the Robot Server, this influences the RS state content"/>
@@ -138,6 +139,7 @@
     <param name="max_velocity_scale_factor" value="$(arg max_velocity_scale_factor)"></param>
     <param name="action_cycle_rate" value="$(arg action_cycle_rate)"></param>
     <param name="reference_frame" value="$(arg reference_frame)"></param>
+    <param name="ee_frame" value="$(arg ee_frame)"></param>
     <param name="target_mode" value="$(arg target_mode)"></param>
     <param name="rs_mode" value="$(arg rs_mode)"></param>
     <param name="action_mode" value="$(arg action_mode)"></param>
