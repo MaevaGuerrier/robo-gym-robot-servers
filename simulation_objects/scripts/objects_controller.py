@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import rospy
+import rclpy
 from std_msgs.msg import Bool
 from geometry_msgs.msg import TransformStamped
 from gazebo_msgs.msg import ModelState
@@ -8,35 +8,41 @@ import numpy as np
 import copy
 import os
 import random
-import tf2_ros
+from tf2_ros import StaticTransformBroadcaster
 import json
+from rclpy.node import Node
 
 move = False 
-class ObjectsController:
+class ObjectsController(Node):
     def __init__(self):
+        super().__init__('objects_controller')
 
-        self.real_robot = rospy.get_param("real_robot")
+        self.declare_parameter('real_robot', False)
+        self.declare_parameter('reference_frame', 'base_link')
+        self.declare_parameter('object_trajectory_file_name', 'no_file')
+        self.declare_parameter('n_objects', 1)
+        self.declare_parameter('object_0_model_name', '')
+        self.declare_parameter('object_0_frame', '')
+        self.declare_parameter('object_1_model_name', '')
+        self.declare_parameter('object_1_frame', '')
 
-        # Objects Model State publisher
+        self.real_robot = self.get_parameter('real_robot').value
+
         if not self.real_robot:
-            self.set_model_state_pub = rospy.Publisher('gazebo/set_model_state', ModelState, queue_size=1)
+            self.set_model_state_pub = self.create_publisher(ModelState, 'gazebo/set_model_state', 1)
 
-        # Objects position update frequency (Hz)
-        self.update_rate = 100 
+        self.update_rate = self.create_rate(100) 
 
-        # move_objects subscriber
-        rospy.Subscriber("move_objects", Bool, self.callback_move_objects)
+        self.create_subscription(Bool, "move_objects", self.callback_move_objects, 1)
         
-        self.reference_frame = rospy.get_param("reference_frame")
-        
-        # Static TF2 Broadcaster
-        self.static_tf2_broadcaster = tf2_ros.StaticTransformBroadcaster()
+        self.reference_frame = self.get_parameter("reference_frame").value
 
-        object_trajectory_file_name = rospy.get_param("object_trajectory_file_name")
+        self.static_tf2_broadcaster = StaticTransformBroadcaster(self)
+
+        object_trajectory_file_name = self.get_parameter("object_trajectory_file_name").value
         if object_trajectory_file_name != 'no_file':
             file_path = os.path.join(os.path.dirname(__file__),'../object_trajectories', object_trajectory_file_name + '.json')
 
-            # Load object trajectory file 
             with open(file_path, 'r') as json_file:
                 self.p = json.load(json_file)
     
@@ -299,32 +305,32 @@ class ObjectsController:
         return x_function, y_function, z_function
 
     def objects_initialization(self):
-        self.n_objects = int(rospy.get_param("n_objects", 1))
+        self.n_objects = int(self.get_parameter("n_objects").value)
         # Initialization of ModelState() messages
         if not self.real_robot:
             self.objects_model_state = [ModelState() for i in range(self.n_objects)]
             # Get objects model names
             for i in range(self.n_objects):
-                self.objects_model_state[i].model_name = rospy.get_param("object_" + repr(i) +"_model_name")
+                self.objects_model_state[i].model_name = self.get_parameter("object_" + repr(i) +"_model_name").value
                 self.objects_model_state[i].reference_frame = self.reference_frame
         # Initialization of Objects tf frames names
-        self.objects_tf_frame = [rospy.get_param("object_" + repr(i) +"_frame") for i in range(self.n_objects)]
-        
+        self.objects_tf_frame = [self.get_parameter("object_" + repr(i) +"_frame").value for i in range(self.n_objects)]
+
 
     def move_objects_up(self):
         # Move objects up in the air 
         for i in range(self.n_objects):
             if not self.real_robot:
-                self.objects_model_state[i].pose.position.x = i
+                self.objects_model_state[i].pose.position.x = float(i)
                 self.objects_model_state[i].pose.position.y = 0.0
                 self.objects_model_state[i].pose.position.z = 3.0
                 self.set_model_state_pub.publish(self.objects_model_state[i]) 
             # Publish tf of objects
             t = TransformStamped()
             t.header.frame_id = self.reference_frame
-            t.header.stamp = rospy.Time.now()
+            t.header.stamp = rclpy.time.Time().to_msg()
             t.child_frame_id = self.objects_tf_frame[i]
-            t.transform.translation.x = i
+            t.transform.translation.x = float(i)
             t.transform.translation.y = 0.0
             t.transform.translation.z = 3.0
             t.transform.rotation.x = 0.0
@@ -332,79 +338,79 @@ class ObjectsController:
             t.transform.rotation.z = 0.0
             t.transform.rotation.w = 1.0
             self.static_tf2_broadcaster.sendTransform(t)
-            rospy.Rate(self.update_rate).sleep()
+            self.update_rate.sleep()
 
     def objects_state_update_loop(self):
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             if move:
                 # Generate Movement Trajectories
                 objects_trajectories = []
                 trajectories_lens = []
                 for i in range(self.n_objects):
-                    function = rospy.get_param("object_" + repr(i) +"_function")
+                    function = self.get_parameter("object_" + repr(i) +"_function").value
                     if function  == "fixed_position":
-                        x = rospy.get_param("object_" + repr(i) + "_x")
-                        y = rospy.get_param("object_" + repr(i) + "_y")
-                        z = rospy.get_param("object_" + repr(i) + "_z")
+                        x = self.get_parameter("object_" + repr(i) + "_x").value
+                        y = self.get_parameter("object_" + repr(i) + "_y").value
+                        z = self.get_parameter("object_" + repr(i) + "_z").value
                         x_trajectory, y_trajectory, z_trajectory = self.get_fixed_position(x,y,z)
                     elif function == "triangle_wave":
-                        x = rospy.get_param("object_" + repr(i) + "_x")
-                        y = rospy.get_param("object_" + repr(i) + "_y")
-                        a = rospy.get_param("object_" + repr(i) + "_z_amplitude")
-                        f = rospy.get_param("object_" + repr(i) + "_z_frequency")
-                        o = rospy.get_param("object_" + repr(i) + "_z_offset")
+                        x = self.get_parameter("object_" + repr(i) + "_x").value
+                        y = self.get_parameter("object_" + repr(i) + "_y").value
+                        a = self.get_parameter("object_" + repr(i) + "_z_amplitude").value
+                        f = self.get_parameter("object_" + repr(i) + "_z_frequency").value
+                        o = self.get_parameter("object_" + repr(i) + "_z_offset").value
                         x_trajectory, y_trajectory, z_trajectory = self.get_triangle_wave(x, y, a, f, o)
                     elif function == "3d_spline":
-                        x_min = rospy.get_param("object_" + repr(i) + "_x_min")
-                        x_max = rospy.get_param("object_" + repr(i) + "_x_max")
-                        y_min = rospy.get_param("object_" + repr(i) + "_y_min")
-                        y_max = rospy.get_param("object_" + repr(i) + "_y_max")
-                        z_min = rospy.get_param("object_" + repr(i) + "_z_min")
-                        z_max = rospy.get_param("object_" + repr(i) + "_z_max")
-                        n_points = rospy.get_param("object_" + repr(i) + "_n_points")
-                        n_sampling_points = rospy.get_param("object_" + repr(i) +"_n_sampling_points")
+                        x_min = self.get_parameter("object_" + repr(i) + "_x_min").value
+                        x_max = self.get_parameter("object_" + repr(i) + "_x_max").value
+                        y_min = self.get_parameter("object_" + repr(i) + "_y_min").value
+                        y_max = self.get_parameter("object_" + repr(i) + "_y_max").value
+                        z_min = self.get_parameter("object_" + repr(i) + "_z_min").value
+                        z_max = self.get_parameter("object_" + repr(i) + "_z_max").value
+                        n_points = self.get_parameter("object_" + repr(i) + "_n_points").value
+                        n_sampling_points = self.get_parameter("object_" + repr(i) +"_n_sampling_points").value
                         x_trajectory, y_trajectory, z_trajectory = self.get_3d_spline(x_min, x_max, y_min, y_max, z_min, z_max, n_points, n_sampling_points)
                     elif function == "3d_spline_ur5_workspace":
-                        x_min = rospy.get_param("object_" + repr(i) + "_x_min")
-                        x_max = rospy.get_param("object_" + repr(i) + "_x_max")
-                        y_min = rospy.get_param("object_" + repr(i) + "_y_min")
-                        y_max = rospy.get_param("object_" + repr(i) + "_y_max")
-                        z_min = rospy.get_param("object_" + repr(i) + "_z_min")
-                        z_max = rospy.get_param("object_" + repr(i) + "_z_max")
-                        n_points = rospy.get_param("object_" + repr(i) + "_n_points")
-                        n_sampling_points = rospy.get_param("object_" + repr(i) +"_n_sampling_points")
+                        x_min = self.get_parameter("object_" + repr(i) + "_x_min").value
+                        x_max = self.get_parameter("object_" + repr(i) + "_x_max").value
+                        y_min = self.get_parameter("object_" + repr(i) + "_y_min").value
+                        y_max = self.get_parameter("object_" + repr(i) + "_y_max").value
+                        z_min = self.get_parameter("object_" + repr(i) + "_z_min").value
+                        z_max = self.get_parameter("object_" + repr(i) + "_z_max").value
+                        n_points = self.get_parameter("object_" + repr(i) + "_n_points").value
+                        n_sampling_points = self.get_parameter("object_" + repr(i) +"_n_sampling_points").value
                         x_trajectory, y_trajectory, z_trajectory = self.get_3d_spline_ur5_workspace(x_min, x_max, y_min, y_max, z_min, z_max, n_points, n_sampling_points)
                     elif function == "fixed_trajectory":
-                        trajectory_id = rospy.get_param("object_" + repr(i) + "_trajectory_id")
+                        trajectory_id = self.get_parameter("object_" + repr(i) + "_trajectory_id").value
                         x_trajectory, y_trajectory, z_trajectory = self.get_fixed_trajectory(trajectory_id)
                     elif function  == "fixed_position_ab":
-                        x_a = rospy.get_param("object_" + repr(i) + "_x_a")
-                        y_a = rospy.get_param("object_" + repr(i) + "_y_a")
-                        z_a = rospy.get_param("object_" + repr(i) + "_z_a")
-                        x_b = rospy.get_param("object_" + repr(i) + "_x_b")
-                        y_b = rospy.get_param("object_" + repr(i) + "_y_b")
-                        z_b = rospy.get_param("object_" + repr(i) + "_z_b")
-                        hold_a = rospy.get_param("object_" + repr(i) + "_hold_a")
-                        hold_b = rospy.get_param("object_" + repr(i) + "_hold_b")
+                        x_a = self.get_parameter("object_" + repr(i) + "_x_a").value
+                        y_a = self.get_parameter("object_" + repr(i) + "_y_a").value
+                        z_a = self.get_parameter("object_" + repr(i) + "_z_a").value
+                        x_b = self.get_parameter("object_" + repr(i) + "_x_b").value
+                        y_b = self.get_parameter("object_" + repr(i) + "_y_b").value
+                        z_b = self.get_parameter("object_" + repr(i) + "_z_b").value
+                        hold_a = self.get_parameter("object_" + repr(i) + "_hold_a").value
+                        hold_b = self.get_parameter("object_" + repr(i) + "_hold_b").value
                         x_trajectory, y_trajectory, z_trajectory = self.get_fixed_position_a_b(x_a, y_a, z_a, x_b, y_b, z_b, hold_a, hold_b)
                     elif function  == "interpolated_abc":
-                        x_a = rospy.get_param("object_" + repr(i) + "_x_a")
-                        y_a = rospy.get_param("object_" + repr(i) + "_y_a")
-                        z_a = rospy.get_param("object_" + repr(i) + "_z_a")
-                        x_b = rospy.get_param("object_" + repr(i) + "_x_b")
-                        y_b = rospy.get_param("object_" + repr(i) + "_y_b")
-                        z_b = rospy.get_param("object_" + repr(i) + "_z_b")
-                        x_c = rospy.get_param("object_" + repr(i) + "_x_c")
-                        y_c = rospy.get_param("object_" + repr(i) + "_y_c")
-                        z_c = rospy.get_param("object_" + repr(i) + "_z_c")
-                        hold_a = rospy.get_param("object_" + repr(i) + "_hold_a")
-                        hold_b = rospy.get_param("object_" + repr(i) + "_hold_b")
-                        hold_c = rospy.get_param("object_" + repr(i) + "_hold_c")
-                        n_sampling_points_ab = rospy.get_param("object_" + repr(i) + "_n_sampling_points_ab")
-                        n_sampling_points_bc = rospy.get_param("object_" + repr(i) + "_n_sampling_points_bc")
+                        x_a = self.get_parameter("object_" + repr(i) + "_x_a").value
+                        y_a = self.get_parameter("object_" + repr(i) + "_y_a").value
+                        z_a = self.get_parameter("object_" + repr(i) + "_z_a").value
+                        x_b = self.get_parameter("object_" + repr(i) + "_x_b").value
+                        y_b = self.get_parameter("object_" + repr(i) + "_y_b").value
+                        z_b = self.get_parameter("object_" + repr(i) + "_z_b").value
+                        x_c = self.get_parameter("object_" + repr(i) + "_x_c").value
+                        y_c = self.get_parameter("object_" + repr(i) + "_y_c").value
+                        z_c = self.get_parameter("object_" + repr(i) + "_z_c").value
+                        hold_a = self.get_parameter("object_" + repr(i) + "_hold_a").value
+                        hold_b = self.get_parameter("object_" + repr(i) + "_hold_b").value
+                        hold_c = self.get_parameter("object_" + repr(i) + "_hold_c").value
+                        n_sampling_points_ab = self.get_parameter("object_" + repr(i) + "_n_sampling_points_ab").value
+                        n_sampling_points_bc = self.get_parameter("object_" + repr(i) + "_n_sampling_points_bc").value
                         x_trajectory, y_trajectory, z_trajectory = self.get_interpolated_a_b_c(x_a, y_a, z_a, x_b, y_b, z_b, x_c, y_c, z_c, hold_a, hold_b, hold_c, n_sampling_points_ab, n_sampling_points_bc)
                     else:
-                        rospy.logerr('Object trajectory function "' +function+ '" not recognized')
+                        self.get_logger().logerr('Object trajectory function "' +function+ '" not recognized')
                     objects_trajectories.append([x_trajectory, y_trajectory, z_trajectory])
                     trajectories_lens.append(len(x_trajectory))
 
@@ -421,7 +427,7 @@ class ObjectsController:
                         # Publish tf of objects
                         t = TransformStamped()
                         t.header.frame_id = self.reference_frame
-                        t.header.stamp = rospy.Time.now()
+                        t.header.stamp = rclpy.time.Time()
                         t.child_frame_id = self.objects_tf_frame[i]
                         t.transform.translation.x = objects_trajectories[i][0][s[i]]
                         t.transform.translation.y = objects_trajectories[i][1][s[i]]
@@ -431,19 +437,21 @@ class ObjectsController:
                         t.transform.rotation.z = 0.0
                         t.transform.rotation.w = 1.0
                         self.static_tf2_broadcaster.sendTransform(t)                        
-                    rospy.Rate(self.update_rate).sleep()
+                    self.update_rate.sleep()
                     s = s + 1
                 # Move objects up in the air 
                 self.move_objects_up()
-                rospy.Rate(self.update_rate).sleep()
+                self.update_rate.sleep()
             else:
                 self.move_objects_up() 
 
 if __name__ == '__main__':
     try:
-        rospy.init_node('objects_controller')
+        rclpy.init()
         oc = ObjectsController()
         oc.objects_initialization()
         oc.objects_state_update_loop()
-    except rospy.ROSInterruptException:
+    except KeyboardInterrupt:
         pass
+    finally:
+        rclpy.shutdown()

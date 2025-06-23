@@ -1,0 +1,7 @@
+setup.py
+src/ur_robot_server/__init__.py
+src/ur_robot_server/ros_bridge.py
+src/ur_robot_server.egg-info/PKG-INFO
+src/ur_robot_server.egg-info/SOURCES.txt
+src/ur_robot_server.egg-info/dependency_links.txt
+src/ur_robot_server.egg-info/top_level.txt

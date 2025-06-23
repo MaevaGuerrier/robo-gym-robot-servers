@@ -1,6 +1,7 @@
 <?xml version="1.0" ?>
-<sdf version="1.5">
+<sdf version="1.8">
   <model name="sphere50_no_collision">
+    <static>true</static>
     <link name="link">
       <pose>0 0 0.0 0 0 0</pose>
       <inertial>
@@ -14,9 +15,7 @@
           <izz>0.27</izz>
         </inertia>
       </inertial>
-      <self_collide>0</self_collide>
-      <kinematic>0</kinematic>
-      <gravity>0</gravity>
+      <enable_wind>false</enable_wind>
 
       <visual name="visual">
         <geometry>
@@ -25,10 +24,9 @@
           </sphere>
         </geometry>
         <material>
-          <script>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-            <name>Gazebo/Red</name>
-          </script>
+          <ambient>1 0 0 1</ambient>
+          <diffuse>1 0 0 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
         </material>
       </visual>
 

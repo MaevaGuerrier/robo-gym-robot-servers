@@ -1,10 +1,6 @@
-#!/usr/bin/env python
-
-from distutils.core import setup
-from catkin_pkg.python_setup import generate_distutils_setup
-
-d = generate_distutils_setup()
-d['packages'] = ['interbotix_arm_robot_server']
-d['package_dir'] = {'': 'src'}
-
-setup(**d)
+entry_points={
+    'console_scripts': [
+        'robot_server = interbotix_arm_robot_server.robot_server:main',
+        'joint_trajectory_command_handler = interbotix_arm_robot_server.joint_trajectory_command_handler:main',
+    ],
+},

@@ -1,25 +1,20 @@
-cmake_minimum_required(VERSION 3.5.1)
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.8)
 project(simulation_objects)
 
-find_package(catkin REQUIRED COMPONENTS
-  rospy
-  std_msgs
-)
-
-catkin_package()
-
-install(DIRECTORY launch
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-)
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(rclpy REQUIRED)
+find_package(std_msgs REQUIRED)
 
 install(DIRECTORY models
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  DESTINATION share/${PROJECT_NAME}
 )
 
 install(DIRECTORY worlds
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  DESTINATION share/${PROJECT_NAME}
 )
 
-catkin_install_python(PROGRAMS scripts/objects_controller.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(PROGRAMS scripts/objects_controller.py
+  DESTINATION lib/${PROJECT_NAME})
+
+ament_package()

@@ -1,18 +1,34 @@
-cmake_minimum_required(VERSION 3.5.1)
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.8)
 project(interbotix_rover_robot_server)
 
-find_package(catkin REQUIRED COMPONENTS
-  rospy
-  std_msgs
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(rclpy REQUIRED)
+
+ament_python_install_package(${PROJECT_NAME})
+
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+  FILES_MATCHING PATTERN "*.py"
 )
 
-catkin_package()
-
-install(DIRECTORY launch
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+  FILES_MATCHING PATTERN "*.yaml"
 )
 
-catkin_python_setup()
-catkin_install_python(PROGRAMS scripts/robot_server.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(DIRECTORY urdf/
+  DESTINATION share/${PROJECT_NAME}/urdf
+  FILES_MATCHING PATTERN "*.xacro"
+)
+
+install(DIRECTORY rviz/
+  DESTINATION share/${PROJECT_NAME}/rviz
+  FILES_MATCHING PATTERN "*.rviz"
+)
+
+ament_package()

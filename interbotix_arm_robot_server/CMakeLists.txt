@@ -1,19 +1,38 @@
-cmake_minimum_required(VERSION 3.5.1)
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.8)
 project(interbotix_arm_robot_server)
 
-find_package(catkin REQUIRED COMPONENTS
-  rospy
-  std_msgs
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(rclpy REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+ament_python_install_package(${PROJECT_NAME})
+
+install(PROGRAMS
+  interbotix_arm_robot_server/robot_server.py
+  interbotix_arm_robot_server/joint_trajectory_command_handler.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-catkin_package()
-
-install(DIRECTORY launch
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+  FILES_MATCHING PATTERN "*.py"
 )
 
-catkin_python_setup()
-catkin_install_python(PROGRAMS scripts/joint_trajectory_command_handler.py 
-                               scripts/robot_server.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+  FILES_MATCHING PATTERN "*.yaml"
+)
+
+install(DIRECTORY urdf/
+  DESTINATION share/${PROJECT_NAME}/urdf
+  FILES_MATCHING PATTERN "*.xacro"
+)
+
+install(DIRECTORY rviz/
+  DESTINATION share/${PROJECT_NAME}/rviz
+  FILES_MATCHING PATTERN "*.rviz"
+)
+
+ament_package()
