@@ -15,7 +15,6 @@ arm_controller:
       - elbow
       - wrist_angle
       - wrist_rotate
-    interface_name: position
     command_interfaces:
       - position
       - velocity
@@ -26,13 +25,11 @@ arm_controller:
     action_monitor_rate: 20.0
     constraints:
       stopped_velocity_tolerance: 0.02
-      goal_time: 1.0
 gripper_controller:
   ros__parameters:
     joints:
       - left_finger
       - right_finger
-    interface_name: position
     command_interfaces:
       - position
     state_interfaces:

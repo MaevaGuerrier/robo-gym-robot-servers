@@ -25,7 +25,6 @@ arm_controller:
     action_monitor_rate: 20.0
     constraints:
       stopped_velocity_tolerance: 0.02
-      goal_time: 1.0
 gripper_controller:
   ros__parameters:
     joints:
