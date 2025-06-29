@@ -3,56 +3,366 @@ import rclpy
 from std_msgs.msg import Bool
 from geometry_msgs.msg import TransformStamped
 from gazebo_msgs.msg import ModelState
-from scipy import signal, interpolate 
-import numpy as np 
+from scipy import signal, interpolate
+import numpy as np
 import copy
 import os
 import random
 from tf2_ros import StaticTransformBroadcaster
 import json
 from rclpy.node import Node
+from rcl_interfaces.srv import GetParameters, ListParameters
+from ros_gz_interfaces.srv import SetEntityPose
+from rclpy.callback_groups import ReentrantCallbackGroup
 
-move = False 
+
 class ObjectsController(Node):
     def __init__(self):
-        super().__init__('objects_controller')
+        super().__init__("objects_controller")
 
-        self.declare_parameter('real_robot', False)
-        self.declare_parameter('reference_frame', 'base_link')
-        self.declare_parameter('object_trajectory_file_name', 'no_file')
-        self.declare_parameter('n_objects', 1)
-        self.declare_parameter('object_0_model_name', '')
-        self.declare_parameter('object_0_frame', '')
-        self.declare_parameter('object_1_model_name', '')
-        self.declare_parameter('object_1_frame', '')
+        self.move = False
+        self.objects_trajectories = []
+        self.trajectories_lens = []
+        self.trajectory_indices = None
 
-        self.real_robot = self.get_parameter('real_robot').value
+        self.declare_parameter("real_robot", False)
+        self.declare_parameter("reference_frame", "base_link")
+        self.declare_parameter("object_trajectory_file_name", "no_file")
+        self.declare_parameter("n_objects", 1)
+        self.declare_parameter("object_0_model_name", "")
+        self.declare_parameter("object_0_frame", "")
+        self.declare_parameter("object_1_model_name", "")
+        self.declare_parameter("object_1_frame", "")
+        self.declare_parameter("world_name", "default")
+
+        self.real_robot = self.get_parameter("real_robot").value
+        self.world_name = self.get_parameter("world_name").value
 
         if not self.real_robot:
-            self.set_model_state_pub = self.create_publisher(ModelState, 'gazebo/set_model_state', 1)
-
-        self.update_rate = self.create_rate(100) 
+            self.gazebo_set_pose = self.create_client(
+                SetEntityPose, "/world/" + self.world_name + "/set_pose"
+            )
 
         self.create_subscription(Bool, "move_objects", self.callback_move_objects, 1)
-        
+
         self.reference_frame = self.get_parameter("reference_frame").value
-
         self.static_tf2_broadcaster = StaticTransformBroadcaster(self)
+        self.future = None
 
-        object_trajectory_file_name = self.get_parameter("object_trajectory_file_name").value
-        if object_trajectory_file_name != 'no_file':
-            file_path = os.path.join(os.path.dirname(__file__),'../object_trajectories', object_trajectory_file_name + '.json')
-
-            with open(file_path, 'r') as json_file:
+        object_trajectory_file_name = self.get_parameter(
+            "object_trajectory_file_name"
+        ).value
+        if object_trajectory_file_name != "no_file":
+            file_path = os.path.join(
+                os.path.dirname(__file__),
+                "../object_trajectories",
+                object_trajectory_file_name + ".json",
+            )
+            with open(file_path, "r") as json_file:
                 self.p = json.load(json_file)
-    
-    def callback_move_objects(self, data):
-        global move
-        if data.data == True:
-            move = True
+
+        self.objects_initialization()
+
+        self.timer = self.create_timer(0.01, self.objects_state_update_callback)
+
+        self.cli = self.create_client(GetParameters, "/robot_server/get_parameters", callback_group=ReentrantCallbackGroup())
+
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("service not available, waiting again...")
+
+        self.get_logger().info("Objects_controller started")
+
+    def get_params_from_server(self, params_name_list):
+        request = GetParameters.Request()
+        request.names = params_name_list
+
+        future = self.cli.call_async(request)
+
+        rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+        if future.done():
+            return future.result()
         else:
-            move = False
-    
+            self.get_logger().error("Parameter request timed out!")
+            return None
+
+    def callback_move_objects(self, data):
+        if data.data == True:
+            self.move = True
+            self.get_logger().debug("Moving objects")
+            self.generate_trajectories()
+        else:
+            self.move = False
+            self.get_logger().debug("Stopping object movement")
+
+    def generate_trajectories(self):
+        """Generate movement trajectories for all objects"""
+        self.objects_trajectories = []
+        self.trajectories_lens = []
+
+        for i in range(self.n_objects):
+            params = ["object_" + repr(i) + "_function"]
+            response = self.get_params_from_server(params)
+            if response is None:
+                self.get_logger().error("Failed to get parameters")
+                return
+            function = response.values[0].string_value
+            if function == "fixed_position":
+                params = [
+                    "object_" + repr(i) + "_x",
+                    "object_" + repr(i) + "_y",
+                    "object_" + repr(i) + "_z",
+                ]
+                response = self.get_params_from_server(params)
+                x, y, z = (
+                    response.values[0].double_value,
+                    response.values[1].double_value,
+                    response.values[2].double_value,
+                )
+                x_trajectory, y_trajectory, z_trajectory = self.get_fixed_position(
+                    x, y, z
+                )
+            elif function == "triangle_wave":
+                params = [
+                    "object_" + repr(i) + "_x",
+                    "object_" + repr(i) + "_y",
+                    "object_" + repr(i) + "_z_amplitude",
+                    "object_" + repr(i) + "_z_frequency",
+                    "object_" + repr(i) + "_z_offset",
+                ]
+                response = self.get_params_from_server(params)
+                x, y, a, f, o = (
+                    response.values[0].double_value,
+                    response.values[1].double_value,
+                    response.values[2].double_value,
+                    response.values[3].double_value,
+                    response.values[4].double_value,
+                )
+                x_trajectory, y_trajectory, z_trajectory = self.get_triangle_wave(
+                    x, y, a, f, o
+                )
+            elif function == "3d_spline":
+                params = [
+                    "object_" + repr(i) + "_x_min",
+                    "object_" + repr(i) + "_x_max",
+                    "object_" + repr(i) + "_y_min",
+                    "object_" + repr(i) + "_y_max",
+                    "object_" + repr(i) + "_z_min",
+                    "object_" + repr(i) + "_z_max",
+                    "object_" + repr(i) + "_n_points",
+                    "object_" + repr(i) + "_n_sampling_points",
+                ]
+                response = self.get_params_from_server(params)
+                (x_min,
+                x_max,
+                y_min,
+                y_max,
+                z_min,
+                z_max,
+                n_points,
+                n_sampling_points) = (
+                    response.values[0].double_value,
+                    response.values[1].double_value,
+                    response.values[2].double_value,
+                    response.values[3].double_value,
+                    response.values[4].double_value,
+                    response.values[5].double_value,
+                    response.values[6].integer_value,
+                    response.values[7].integer_value)
+                x_trajectory, y_trajectory, z_trajectory = self.get_3d_spline(
+                    x_min,
+                    x_max,
+                    y_min,
+                    y_max,
+                    z_min,
+                    z_max,
+                    n_points,
+                    n_sampling_points,
+                )
+            elif function == "3d_spline_ur5_workspace":
+                params = [
+                    "object_" + repr(i) + "_x_min",
+                    "object_" + repr(i) + "_x_max",
+                    "object_" + repr(i) + "_y_min",
+                    "object_" + repr(i) + "_y_max",
+                    "object_" + repr(i) + "_z_min",
+                    "object_" + repr(i) + "_z_max",
+                    "object_" + repr(i) + "_n_points",
+                    "object_" + repr(i) + "_n_sampling_points",
+                ]
+                response = self.get_params_from_server(params)
+                (x_min,
+                x_max,
+                y_min,
+                y_max,
+                z_min,
+                z_max,
+                n_points,
+                n_sampling_points) = (
+                    response.values[0].double_value,
+                    response.values[1].double_value,
+                    response.values[2].double_value,
+                    response.values[3].double_value,
+                    response.values[4].double_value,
+                    response.values[5].double_value,
+                    response.values[6].integer_value,
+                    response.values[7].integer_value,
+                )
+                x_trajectory, y_trajectory, z_trajectory = (
+                    self.get_3d_spline_ur5_workspace(
+                        x_min,
+                        x_max,
+                        y_min,
+                        y_max,
+                        z_min,
+                        z_max,
+                        n_points,
+                        n_sampling_points,
+                    )
+                )
+            elif function == "fixed_trajectory":
+                params = ["object_" + repr(i) + "_trajectory_id"]
+                response = self.get_params_from_server(params)
+                trajectory_id = response.values[0].integer_value
+                x_trajectory, y_trajectory, z_trajectory = self.get_fixed_trajectory(
+                    trajectory_id
+                )
+            elif function == "fixed_position_ab":
+                params = [
+                    "object_" + repr(i) + "_x_a",
+                    "object_" + repr(i) + "_y_a",
+                    "object_" + repr(i) + "_z_a",
+                    "object_" + repr(i) + "_x_b",
+                    "object_" + repr(i) + "_y_b",
+                    "object_" + repr(i) + "_z_b",
+                    "object_" + repr(i) + "_hold_a",
+                    "object_" + repr(i) + "_hold_b",
+                ]
+                response = self.get_params_from_server(params)
+                x_a, y_a, z_a, x_b, y_b, z_b, hold_a, hold_b = (
+                    response.values[0].double_value,
+                    response.values[1].double_value,
+                    response.values[2].double_value,
+                    response.values[3].double_value,
+                    response.values[4].double_value,
+                    response.values[5].double_value,
+                    response.values[6].bool_value,
+                    response.values[7].bool_value)
+                x_trajectory, y_trajectory, z_trajectory = self.get_fixed_position_a_b(
+                    x_a, y_a, z_a, x_b, y_b, z_b, hold_a, hold_b
+                )
+            elif function == "interpolated_abc":
+                params = [
+                    "object_" + repr(i) + "_x_a",
+                    "object_" + repr(i) + "_y_a",
+                    "object_" + repr(i) + "_z_a",
+                    "object_" + repr(i) + "_x_b",
+                    "object_" + repr(i) + "_y_b",
+                    "object_" + repr(i) + "_z_b",
+                    "object_" + repr(i) + "_x_c",
+                    "object_" + repr(i) + "_y_c",
+                    "object_" + repr(i) + "_z_c",
+                    "object_" + repr(i) + "_hold_a",
+                    "object_" + repr(i) + "_hold_b",
+                    "object_" + repr(i) + "_hold_c",
+                    "object_" + repr(i) + "_n_sampling_points_ab",
+                    "object_" + repr(i) + "_n_sampling_points_bc",
+                ]
+                response = self.get_params_from_server(params)
+                (
+                    x_a,
+                    y_a,
+                    z_a,
+                    x_b,
+                    y_b,
+                    z_b,
+                    x_c,
+                    y_c,
+                    z_c,
+                    hold_a,
+                    hold_b,
+                    hold_c,
+                    n_points,
+                    n_sampling_points,
+                    n_sampling_points_ab,
+                    n_sampling_points_bc,
+                ) = (
+                    response.values[0].double_value,
+                    response.values[1].double_value,
+                    response.values[2].double_value,
+                    response.values[3].double_value,
+                    response.values[4].double_value,
+                    response.values[5].double_value,
+                    response.values[6].bool_value,
+                    response.values[7].bool_value,
+                    response.values[8].bool_value,
+                    response.values[9].integer_value,
+                    response.values[10].integer_value,
+                    response.values[11].integer_value,
+                    response.values[12].integer_value)
+                x_trajectory, y_trajectory, z_trajectory = self.get_interpolated_a_b_c(
+                    x_a,
+                    y_a,
+                    z_a,
+                    x_b,
+                    y_b,
+                    z_b,
+                    x_c,
+                    y_c,
+                    z_c,
+                    hold_a,
+                    hold_b,
+                    hold_c,
+                    n_sampling_points_ab,
+                    n_sampling_points_bc,
+                )
+            else:
+                self.get_logger().error(
+                    'Object trajectory function "' + function + '" not recognized'
+                )
+                continue
+
+            self.objects_trajectories.append([x_trajectory, y_trajectory, z_trajectory])
+            self.trajectories_lens.append(len(x_trajectory))
+
+        self.trajectory_indices = np.zeros((self.n_objects,), dtype=int)
+
+    def objects_state_update_callback(self):
+        """Timer callback for updating object states"""
+        if self.move and self.objects_trajectories:
+            self.trajectory_indices = np.mod(
+                self.trajectory_indices, self.trajectories_lens
+            )
+
+            for i in range(self.n_objects):
+                idx = self.trajectory_indices[i]
+                x_pos = self.objects_trajectories[i][0][idx]
+                y_pos = self.objects_trajectories[i][1][idx]
+                z_pos = self.objects_trajectories[i][2][idx]
+
+                # Update Gazebo model if not real robot
+                if not self.real_robot:
+                    self.objects_pose[i].pose.position.x = float(x_pos)
+                    self.objects_pose[i].pose.position.y = float(y_pos)
+                    self.objects_pose[i].pose.position.z = float(z_pos)
+                    self.gazebo_set_pose.call_async(self.objects_pose[i])
+
+                t = TransformStamped()
+                t.header.frame_id = self.reference_frame
+                t.header.stamp = self.get_clock().now().to_msg()
+                t.child_frame_id = self.objects_tf_frame[i]
+                t.transform.translation.x = x_pos
+                t.transform.translation.y = y_pos
+                t.transform.translation.z = z_pos
+                t.transform.rotation.x = 0.0
+                t.transform.rotation.y = 0.0
+                t.transform.rotation.z = 0.0
+                t.transform.rotation.w = 1.0
+                self.static_tf2_broadcaster.sendTransform(t)
+
+            self.trajectory_indices += 1
+        else:
+            self.move_objects_up()
+
     def get_fixed_position(self, x, y, z):
         """Generate trajectory for object in a fixed position
 
@@ -65,15 +375,14 @@ class ObjectsController(Node):
             list: x coordinate function
             list: y coordinate function
             list: z coordinate function
-        """        
+        """
         x_function = [x]
         y_function = [y]
         z_function = [z]
-        
-        return x_function, y_function, z_function 
+
+        return x_function, y_function, z_function
 
     def get_triangle_wave(self, x, y, amplitude, frequency, offset):
-
         """Generate samples of triangle wave function with amplitude in the z axis direction.
 
         Args:
@@ -94,16 +403,27 @@ class ObjectsController(Node):
         # Create array with time samples over 1 full function period
         sampling_rate = copy.deepcopy(self.update_rate)
         samples_len = int(sampling_rate / frequency)
-        t = np.linspace(0, (1/frequency), samples_len)
+        t = np.linspace(0, (1 / frequency), samples_len)
 
         x_function = np.full(samples_len, x)
         y_function = np.full(samples_len, y)
-        z_function = offset + amplitude * signal.sawtooth(2 * np.pi * frequency * t, 0.5)
+        z_function = offset + amplitude * signal.sawtooth(
+            2 * np.pi * frequency * t, 0.5
+        )
 
         return x_function, y_function, z_function
-    
-    def get_3d_spline(self, x_min, x_max, y_min, y_max, z_min, z_max, n_points=10, n_sampling_points=4000):
-        
+
+    def get_3d_spline(
+        self,
+        x_min,
+        x_max,
+        y_min,
+        y_max,
+        z_min,
+        z_max,
+        n_points=10,
+        n_sampling_points=4000,
+    ):
         """Generate samples of the cartesian coordinates of a 3d spline.
 
         Args:
@@ -123,21 +443,17 @@ class ObjectsController(Node):
 
         """
 
-        # Convert number of points to int
         n_points = int(n_points)
-        # Convert number of  sampling points to int
-        # By increasing the number of sampling points the speed of the object decreases
         n_sampling_points = int(n_sampling_points)
-        # Create array with time samples over 1 full function period
 
         x = np.random.uniform(x_min, x_max, n_points)
         y = np.random.uniform(y_min, y_max, n_points)
         z = np.random.uniform(z_min, z_max, n_points)
 
         # set last point equal to first to have a closed trajectory
-        x[n_points-1] = x[0]
-        y[n_points-1] = y[0]
-        z[n_points-1] = z[0]
+        x[n_points - 1] = x[0]
+        y[n_points - 1] = y[0]
+        z[n_points - 1] = z[0]
 
         smoothness = 0
         tck, u = interpolate.splprep([x, y, z], s=smoothness)
@@ -146,9 +462,18 @@ class ObjectsController(Node):
 
         return x_function, y_function, z_function
 
-    def get_3d_spline_ur5_workspace(self, x_min, x_max, y_min, y_max, z_min, z_max, n_points = 10, n_sampling_points = 4000):
-        
-        """Generate samples of the cartesian coordinates of a 3d spline that do not cross a vertical 
+    def get_3d_spline_ur5_workspace(
+        self,
+        x_min,
+        x_max,
+        y_min,
+        y_max,
+        z_min,
+        z_max,
+        n_points=10,
+        n_sampling_points=4000,
+    ):
+        """Generate samples of the cartesian coordinates of a 3d spline that do not cross a vertical
             cylinder of radius r_min centered in 0,0.
 
         Args:
@@ -168,57 +493,60 @@ class ObjectsController(Node):
 
         """
 
-        r_min_cylinder = 0.2 
-        r_min_sphere_base = 0.35 
+        r_min_cylinder = 0.2
+        r_min_sphere_base = 0.35
 
-        # Convert number of points to int
         n_points = int(n_points)
-        # Convert number of  sampling points to int
-        # By increasing the number of sampling points the speed of the object decreases
         n_sampling_points = int(n_sampling_points)
-        # Create array with time samples over 1 full function period
 
         search = True
         while search:
-            x = np.random.uniform(x_min,x_max,n_points)
-            y = np.random.uniform(y_min,y_max,n_points)
-            z = np.random.uniform(z_min,z_max,n_points)
+            x = np.random.uniform(x_min, x_max, n_points)
+            y = np.random.uniform(y_min, y_max, n_points)
+            z = np.random.uniform(z_min, z_max, n_points)
 
             # set first point oustide of square of size 0.5m centered in 0,0
-            x[0] = random.choice([np.random.uniform(-1.0,-0.5),np.random.uniform(0.5,1.0)])
-            y[0] = random.choice([np.random.uniform(-1.0,-0.5),np.random.uniform(0.5,1.0)])
+            x[0] = random.choice(
+                [np.random.uniform(-1.0, -0.5), np.random.uniform(0.5, 1.0)]
+            )
+            y[0] = random.choice(
+                [np.random.uniform(-1.0, -0.5), np.random.uniform(0.5, 1.0)]
+            )
 
             # set last point equal to first to have a closed trajectory
-            x[n_points-1] = x[0]
-            y[n_points-1] = y[0]
-            z[n_points-1] = z[0]
+            x[n_points - 1] = x[0]
+            y[n_points - 1] = y[0]
+            z[n_points - 1] = z[0]
 
             smoothness = 0
-            tck, u = interpolate.splprep([x,y,z], s=smoothness)
-            u_fine = np.linspace(0,1,n_sampling_points)
+            tck, u = interpolate.splprep([x, y, z], s=smoothness)
+            u_fine = np.linspace(0, 1, n_sampling_points)
             x_function, y_function, z_function = interpolate.splev(u_fine, tck)
-            
+
             search = False
             for i in range(len(x_function)):
-                if (x_function[i]**2+y_function[i]**2)**(1/2) <= r_min_cylinder or \
-                    (x_function[i]**2+y_function[i]**2+z_function[i]**2)**(1/2) <= r_min_sphere_base :
+                if (x_function[i] ** 2 + y_function[i] ** 2) ** (
+                    1 / 2
+                ) <= r_min_cylinder or (
+                    x_function[i] ** 2 + y_function[i] ** 2 + z_function[i] ** 2
+                ) ** (
+                    1 / 2
+                ) <= r_min_sphere_base:
                     search = True
 
         return x_function, y_function, z_function
 
     def get_fixed_trajectory(self, trajectory_id):
         # file_name = "obstacle_trajectories.yaml"
-
-
         trajectory_name = "trajectory_" + str(int(trajectory_id))
         x_function = self.p[trajectory_name]["x"]
         y_function = self.p[trajectory_name]["y"]
         z_function = self.p[trajectory_name]["z"]
 
-        return x_function, y_function, z_function 
+        return x_function, y_function, z_function
 
     def get_fixed_position_a_b(self, x_a, y_a, z_a, x_b, y_b, z_b, hold_a, hold_b):
-        """Generate trajectory for object in a fixed position a for hold_a time and 
+        """Generate trajectory for object in a fixed position a for hold_a time and
             in a fixed position b for hold_b time.
 
         Args:
@@ -235,27 +563,43 @@ class ObjectsController(Node):
             list: x coordinate function
             list: y coordinate function
             list: z coordinate function
-        """        
+        """
         x_a_function = np.full(int(self.update_rate * hold_a), x_a)
         y_a_function = np.full(int(self.update_rate * hold_a), y_a)
         z_a_function = np.full(int(self.update_rate * hold_a), z_a)
         x_b_function = np.full(int(self.update_rate * hold_b), x_b)
         y_b_function = np.full(int(self.update_rate * hold_b), y_b)
         z_b_function = np.full(int(self.update_rate * hold_b), z_b)
-        
+
         x_function = np.concatenate((x_a_function, x_b_function))
         y_function = np.concatenate((y_a_function, y_b_function))
         z_function = np.concatenate((z_a_function, z_b_function))
-        
+
         return x_function, y_function, z_function
 
-    def get_interpolated_a_b_c(self, x_a, y_a, z_a, x_b, y_b, z_b, x_c, y_c, z_c, hold_a, hold_b, hold_c, n_sampling_points_ab, n_sampling_points_bc):
-        """Generate trajectory for object: 
-            - a for hold_a time 
+    def get_interpolated_a_b_c(
+        self,
+        x_a,
+        y_a,
+        z_a,
+        x_b,
+        y_b,
+        z_b,
+        x_c,
+        y_c,
+        z_c,
+        hold_a,
+        hold_b,
+        hold_c,
+        n_sampling_points_ab,
+        n_sampling_points_bc,
+    ):
+        """Generate trajectory for object:
+            - a for hold_a time
             - move from a to b
-            - b for hold_c time 
+            - b for hold_c time
             - move from b to c
-            - c for hold_c time 
+            - c for hold_c time
 
         Args:
             x_a (float): x coordinate position a (m).
@@ -277,58 +621,66 @@ class ObjectsController(Node):
             list: x coordinate function
             list: y coordinate function
             list: z coordinate function
-        """        
+        """
         x_a_function = np.full(int(self.update_rate * hold_a), x_a)
         y_a_function = np.full(int(self.update_rate * hold_a), y_a)
         z_a_function = np.full(int(self.update_rate * hold_a), z_a)
 
-        tck_ab, _ = interpolate.splprep([[x_a,x_b],[y_a,y_b],[z_a,z_b]], s=0, k=1)
+        tck_ab, _ = interpolate.splprep([[x_a, x_b], [y_a, y_b], [z_a, z_b]], s=0, k=1)
         u_fine_ab = np.linspace(0, 1, n_sampling_points_ab)
-        x_ab_function, y_ab_function, z_ab_function = interpolate.splev(u_fine_ab, tck_ab)
+        x_ab_function, y_ab_function, z_ab_function = interpolate.splev(
+            u_fine_ab, tck_ab
+        )
 
         x_b_function = np.full(int(self.update_rate * hold_b), x_b)
         y_b_function = np.full(int(self.update_rate * hold_b), y_b)
         z_b_function = np.full(int(self.update_rate * hold_b), z_b)
 
-        tck_bc, _ = interpolate.splprep([[x_b,x_c],[y_b,y_c],[z_b,z_c]], s=0, k=1)
+        tck_bc, _ = interpolate.splprep([[x_b, x_c], [y_b, y_c], [z_b, z_c]], s=0, k=1)
         u_fine_bc = np.linspace(0, 1, n_sampling_points_bc)
-        x_bc_function, y_bc_function, z_bc_function = interpolate.splev(u_fine_bc, tck_bc)
+        x_bc_function, y_bc_function, z_bc_function = interpolate.splev(
+            u_fine_bc, tck_bc
+        )
 
         x_c_function = np.full(int(self.update_rate * hold_c), x_c)
         y_c_function = np.full(int(self.update_rate * hold_c), y_c)
         z_c_function = np.full(int(self.update_rate * hold_c), z_c)
-        
-        x_function = np.concatenate((x_a_function, x_ab_function, x_b_function, x_bc_function, x_c_function))
-        y_function = np.concatenate((y_a_function, y_ab_function, y_b_function, y_bc_function, y_c_function))
-        z_function = np.concatenate((z_a_function, z_ab_function, z_b_function, z_bc_function, z_c_function))
-        
+
+        x_function = np.concatenate(
+            (x_a_function, x_ab_function, x_b_function, x_bc_function, x_c_function)
+        )
+        y_function = np.concatenate(
+            (y_a_function, y_ab_function, y_b_function, y_bc_function, y_c_function)
+        )
+        z_function = np.concatenate(
+            (z_a_function, z_ab_function, z_b_function, z_bc_function, z_c_function)
+        )
+
         return x_function, y_function, z_function
 
     def objects_initialization(self):
         self.n_objects = int(self.get_parameter("n_objects").value)
-        # Initialization of ModelState() messages
         if not self.real_robot:
-            self.objects_model_state = [ModelState() for i in range(self.n_objects)]
-            # Get objects model names
+            self.objects_pose = [SetEntityPose.Request() for i in range(self.n_objects)]
             for i in range(self.n_objects):
-                self.objects_model_state[i].model_name = self.get_parameter("object_" + repr(i) +"_model_name").value
-                self.objects_model_state[i].reference_frame = self.reference_frame
-        # Initialization of Objects tf frames names
-        self.objects_tf_frame = [self.get_parameter("object_" + repr(i) +"_frame").value for i in range(self.n_objects)]
-
+                self.objects_pose[i].entity.name = self.get_parameter(
+                    "object_" + repr(i) + "_model_name"
+                ).value
+        self.objects_tf_frame = [
+            self.get_parameter("object_" + repr(i) + "_frame").value
+            for i in range(self.n_objects)
+        ]
 
     def move_objects_up(self):
-        # Move objects up in the air 
         for i in range(self.n_objects):
             if not self.real_robot:
-                self.objects_model_state[i].pose.position.x = float(i)
-                self.objects_model_state[i].pose.position.y = 0.0
-                self.objects_model_state[i].pose.position.z = 3.0
-                self.set_model_state_pub.publish(self.objects_model_state[i]) 
-            # Publish tf of objects
+                self.objects_pose[i].pose.position.x = float(i)
+                self.objects_pose[i].pose.position.y = 0.0
+                self.objects_pose[i].pose.position.z = 3.0
+                self.gazebo_set_pose.call_async(self.objects_pose[i])
             t = TransformStamped()
             t.header.frame_id = self.reference_frame
-            t.header.stamp = rclpy.time.Time().to_msg()
+            t.header.stamp = self.get_clock().now().to_msg()
             t.child_frame_id = self.objects_tf_frame[i]
             t.transform.translation.x = float(i)
             t.transform.translation.y = 0.0
@@ -338,120 +690,14 @@ class ObjectsController(Node):
             t.transform.rotation.z = 0.0
             t.transform.rotation.w = 1.0
             self.static_tf2_broadcaster.sendTransform(t)
-            self.update_rate.sleep()
 
-    def objects_state_update_loop(self):
-        while rclpy.ok():
-            if move:
-                # Generate Movement Trajectories
-                objects_trajectories = []
-                trajectories_lens = []
-                for i in range(self.n_objects):
-                    function = self.get_parameter("object_" + repr(i) +"_function").value
-                    if function  == "fixed_position":
-                        x = self.get_parameter("object_" + repr(i) + "_x").value
-                        y = self.get_parameter("object_" + repr(i) + "_y").value
-                        z = self.get_parameter("object_" + repr(i) + "_z").value
-                        x_trajectory, y_trajectory, z_trajectory = self.get_fixed_position(x,y,z)
-                    elif function == "triangle_wave":
-                        x = self.get_parameter("object_" + repr(i) + "_x").value
-                        y = self.get_parameter("object_" + repr(i) + "_y").value
-                        a = self.get_parameter("object_" + repr(i) + "_z_amplitude").value
-                        f = self.get_parameter("object_" + repr(i) + "_z_frequency").value
-                        o = self.get_parameter("object_" + repr(i) + "_z_offset").value
-                        x_trajectory, y_trajectory, z_trajectory = self.get_triangle_wave(x, y, a, f, o)
-                    elif function == "3d_spline":
-                        x_min = self.get_parameter("object_" + repr(i) + "_x_min").value
-                        x_max = self.get_parameter("object_" + repr(i) + "_x_max").value
-                        y_min = self.get_parameter("object_" + repr(i) + "_y_min").value
-                        y_max = self.get_parameter("object_" + repr(i) + "_y_max").value
-                        z_min = self.get_parameter("object_" + repr(i) + "_z_min").value
-                        z_max = self.get_parameter("object_" + repr(i) + "_z_max").value
-                        n_points = self.get_parameter("object_" + repr(i) + "_n_points").value
-                        n_sampling_points = self.get_parameter("object_" + repr(i) +"_n_sampling_points").value
-                        x_trajectory, y_trajectory, z_trajectory = self.get_3d_spline(x_min, x_max, y_min, y_max, z_min, z_max, n_points, n_sampling_points)
-                    elif function == "3d_spline_ur5_workspace":
-                        x_min = self.get_parameter("object_" + repr(i) + "_x_min").value
-                        x_max = self.get_parameter("object_" + repr(i) + "_x_max").value
-                        y_min = self.get_parameter("object_" + repr(i) + "_y_min").value
-                        y_max = self.get_parameter("object_" + repr(i) + "_y_max").value
-                        z_min = self.get_parameter("object_" + repr(i) + "_z_min").value
-                        z_max = self.get_parameter("object_" + repr(i) + "_z_max").value
-                        n_points = self.get_parameter("object_" + repr(i) + "_n_points").value
-                        n_sampling_points = self.get_parameter("object_" + repr(i) +"_n_sampling_points").value
-                        x_trajectory, y_trajectory, z_trajectory = self.get_3d_spline_ur5_workspace(x_min, x_max, y_min, y_max, z_min, z_max, n_points, n_sampling_points)
-                    elif function == "fixed_trajectory":
-                        trajectory_id = self.get_parameter("object_" + repr(i) + "_trajectory_id").value
-                        x_trajectory, y_trajectory, z_trajectory = self.get_fixed_trajectory(trajectory_id)
-                    elif function  == "fixed_position_ab":
-                        x_a = self.get_parameter("object_" + repr(i) + "_x_a").value
-                        y_a = self.get_parameter("object_" + repr(i) + "_y_a").value
-                        z_a = self.get_parameter("object_" + repr(i) + "_z_a").value
-                        x_b = self.get_parameter("object_" + repr(i) + "_x_b").value
-                        y_b = self.get_parameter("object_" + repr(i) + "_y_b").value
-                        z_b = self.get_parameter("object_" + repr(i) + "_z_b").value
-                        hold_a = self.get_parameter("object_" + repr(i) + "_hold_a").value
-                        hold_b = self.get_parameter("object_" + repr(i) + "_hold_b").value
-                        x_trajectory, y_trajectory, z_trajectory = self.get_fixed_position_a_b(x_a, y_a, z_a, x_b, y_b, z_b, hold_a, hold_b)
-                    elif function  == "interpolated_abc":
-                        x_a = self.get_parameter("object_" + repr(i) + "_x_a").value
-                        y_a = self.get_parameter("object_" + repr(i) + "_y_a").value
-                        z_a = self.get_parameter("object_" + repr(i) + "_z_a").value
-                        x_b = self.get_parameter("object_" + repr(i) + "_x_b").value
-                        y_b = self.get_parameter("object_" + repr(i) + "_y_b").value
-                        z_b = self.get_parameter("object_" + repr(i) + "_z_b").value
-                        x_c = self.get_parameter("object_" + repr(i) + "_x_c").value
-                        y_c = self.get_parameter("object_" + repr(i) + "_y_c").value
-                        z_c = self.get_parameter("object_" + repr(i) + "_z_c").value
-                        hold_a = self.get_parameter("object_" + repr(i) + "_hold_a").value
-                        hold_b = self.get_parameter("object_" + repr(i) + "_hold_b").value
-                        hold_c = self.get_parameter("object_" + repr(i) + "_hold_c").value
-                        n_sampling_points_ab = self.get_parameter("object_" + repr(i) + "_n_sampling_points_ab").value
-                        n_sampling_points_bc = self.get_parameter("object_" + repr(i) + "_n_sampling_points_bc").value
-                        x_trajectory, y_trajectory, z_trajectory = self.get_interpolated_a_b_c(x_a, y_a, z_a, x_b, y_b, z_b, x_c, y_c, z_c, hold_a, hold_b, hold_c, n_sampling_points_ab, n_sampling_points_bc)
-                    else:
-                        self.get_logger().logerr('Object trajectory function "' +function+ '" not recognized')
-                    objects_trajectories.append([x_trajectory, y_trajectory, z_trajectory])
-                    trajectories_lens.append(len(x_trajectory))
 
-                # Move objects 
-                s = np.zeros((self.n_objects,), dtype=int)
-                while move: 
-                    s = np.mod(s,trajectories_lens)
-                    for i in range(self.n_objects):
-                        if not self.real_robot:
-                            self.objects_model_state[i].pose.position.x = objects_trajectories[i][0][s[i]]
-                            self.objects_model_state[i].pose.position.y = objects_trajectories[i][1][s[i]]
-                            self.objects_model_state[i].pose.position.z = objects_trajectories[i][2][s[i]]
-                            self.set_model_state_pub.publish(self.objects_model_state[i])
-                        # Publish tf of objects
-                        t = TransformStamped()
-                        t.header.frame_id = self.reference_frame
-                        t.header.stamp = rclpy.time.Time()
-                        t.child_frame_id = self.objects_tf_frame[i]
-                        t.transform.translation.x = objects_trajectories[i][0][s[i]]
-                        t.transform.translation.y = objects_trajectories[i][1][s[i]]
-                        t.transform.translation.z = objects_trajectories[i][2][s[i]]
-                        t.transform.rotation.x = 0.0
-                        t.transform.rotation.y = 0.0
-                        t.transform.rotation.z = 0.0
-                        t.transform.rotation.w = 1.0
-                        self.static_tf2_broadcaster.sendTransform(t)                        
-                    self.update_rate.sleep()
-                    s = s + 1
-                # Move objects up in the air 
-                self.move_objects_up()
-                self.update_rate.sleep()
-            else:
-                self.move_objects_up() 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
+    rclpy.init()
+    oc = ObjectsController()
     try:
-        rclpy.init()
-        oc = ObjectsController()
-        oc.objects_initialization()
-        oc.objects_state_update_loop()
+        rclpy.spin(oc)
     except KeyboardInterrupt:
         pass
-    finally:
-        rclpy.shutdown()
+    oc.destroy_node()
+    rclpy.shutdown()

@@ -1,5 +1,4 @@
 import rclpy
-import rclpy.duration
 from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile
@@ -23,14 +22,12 @@ import copy
 class UrRosBridge:
     def __init__(self, node):
         self.node = node
-
+        self.node.get_logger().info('Initializing URRosBridge...')
         self.reset = Event()
         self.reset.clear()
         self.get_state_event = Event()
         self.get_state_event.set()
 
-        # self.node.declare_parameter('real_robot', False)
-        # self.node.declare_parameter('ur_model', 'ur10')
         self.node.declare_parameter('action_cycle_rate', 125.0)
         self.node.declare_parameter('max_velocity_scale_factor', 1.0)
         self.node.declare_parameter('reference_frame', 'base_link')
@@ -39,7 +36,7 @@ class UrRosBridge:
         self.node.declare_parameter('target_mode', '1object')
         self.node.declare_parameter('action_mode', 'abs_pos')
         self.node.declare_parameter('objects_controller', False)
-        self.node.declare_parameter('n_objects', 1)
+        self.node.declare_parameter('n_objects', 0)
         self.node.declare_parameter('use_voxel_occupancy', False)
 
         self.real_robot = self.node.get_parameter('real_robot').value
@@ -114,6 +111,7 @@ class UrRosBridge:
         # Get environment state
         state =[]
         state_dict = {}
+
         if self.rs_mode == 'only_robot':
             # Joint Positions and Joint Velocities
             joint_position = copy.deepcopy(self.joint_position)
@@ -121,8 +119,9 @@ class UrRosBridge:
             state += self._get_joint_ordered_value_list(joint_position)
             state += self._get_joint_ordered_value_list(joint_velocity)
             state_dict.update(self._get_joint_states_dict(joint_position, joint_velocity))
+
             # ee to ref transform
-            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=2.0))
+            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.time.Time(), timeout=Duration(seconds=2.0))
             ee_to_ref_trans_list = self._transform_to_list(ee_to_ref_trans)
             state += ee_to_ref_trans_list
             state_dict.update(self._get_transform_dict(ee_to_ref_trans, 'ee_to_ref'))
@@ -131,8 +130,9 @@ class UrRosBridge:
             ur_collision = any(self.collision_sensors.values())
             state += [ur_collision]
             state_dict['in_collision'] = float(ur_collision)
+
         elif self.rs_mode == '1object':
-            # Object 0 Pose 
+            # Object 0 Pose
             object_0_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.objects_frame[0], rclpy.time.Time())
             object_0_trans_list = self._transform_to_list(object_0_trans)
             state += object_0_trans_list
@@ -143,11 +143,13 @@ class UrRosBridge:
             state += self._get_joint_ordered_value_list(joint_position)
             state += self._get_joint_ordered_value_list(joint_velocity)
             state_dict.update(self._get_joint_states_dict(joint_position, joint_velocity))
+
             # ee to ref transform
             ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.time.Time())
             ee_to_ref_trans_list = self._transform_to_list(ee_to_ref_trans)
             state += ee_to_ref_trans_list
             state_dict.update(self._get_transform_dict(ee_to_ref_trans, 'ee_to_ref'))
+
             # Collision sensors
             ur_collision = any(self.collision_sensors.values())
             state += [ur_collision]
@@ -226,15 +228,14 @@ class UrRosBridge:
                     
         self.get_state_event.set()
 
-        # Create and fill State message
         msg = robot_server_pb2.State(state=state, state_dict=state_dict, success= True)
        
         return msg
 
     def set_state(self, state_msg):
-        # Set target internal value
-        self.target = [state_msg.float_params['object_0_x'], state_msg.float_params['object_0_y'], state_msg.float_params['object_0_z']]
-        # Publish Target Marker
+        if 'object_0_x' in state_msg.float_params and 'object_0_y' in state_msg.float_params and 'object_0_z' in state_msg.float_params:
+            self.target = [state_msg.float_params['object_0_x'], state_msg.float_params['object_0_y'], state_msg.float_params['object_0_z']]
+
         self.publish_target_marker(self.target)
 
         if all (j in state_msg.state_dict for j in ('base_joint_position','shoulder_joint_position', 'elbow_joint_position', \
@@ -243,24 +244,29 @@ class UrRosBridge:
         else:
             state_dict = False 
 
-        # Clear reset Event
         self.reset.clear()
 
-        # Setup Objects movement
         if self.objects_controller:
-            # Stop movement of objects
             msg = Bool()
             msg.data = False
             self.move_objects_pub.publish(msg)
 
-            # Loop through all the string_params and float_params and set them as ROS parameters
-            string_params = [rclpy.parameter.Parameter(param, rclpy.parameter.Parameter.Type.STRING, state_msg.string_params[param]) 
-                 for param in state_msg.string_params]
-
-            float_params = [rclpy.parameter.Parameter(param, rclpy.parameter.Parameter.Type.DOUBLE, state_msg.float_params[param]) 
-                            for param in state_msg.float_params]
-
-            self.set_parameters(string_params + float_params)
+            if state_msg.string_params:
+                for param_name, param_value in state_msg.string_params.items():
+                    if not self.node.has_parameter(param_name):
+                        self.node.declare_parameter(param_name, param_value)
+                    else:
+                        self.node.set_parameters([
+                            rclpy.parameter.Parameter(param_name, rclpy.parameter.Parameter.Type.STRING, param_value)
+                        ])
+            if state_msg.float_params:
+                for param_name, param_value in state_msg.float_params.items():
+                    if not self.node.has_parameter(param_name):
+                        self.node.declare_parameter(param_name, param_value)
+                    else:
+                        self.node.set_parameters([
+                            rclpy.parameter.Parameter(param_name, rclpy.parameter.Parameter.Type.DOUBLE, param_value)
+                        ])
 
         # UR Joints Positions
         if state_dict:
@@ -299,7 +305,7 @@ class UrRosBridge:
         t_marker.pose.position.x = target_pose[0]
         t_marker.pose.position.y = target_pose[1]
         t_marker.pose.position.z = target_pose[2]
-        rpy_orientation = PyKDL.Rotation.RPY(0.0, 0.0, target_pose[2])
+        rpy_orientation = PyKDL.Rotation.RPY(0.0, 0.0, 0.0)
         q_orientation = rpy_orientation.GetQuaternion()
         t_marker.pose.orientation.x = q_orientation[0]
         t_marker.pose.orientation.y = q_orientation[1]
@@ -315,7 +321,6 @@ class UrRosBridge:
         self.target_pub.publish(t_marker)
 
     def send_action(self, action):
-
         if self.action_mode == 'abs_pos':
             executed_action = self.publish_env_arm_cmd(action)
         
@@ -334,7 +339,6 @@ class UrRosBridge:
             self.publish_env_arm_cmd(goal_joint_position)
             self.get_state_event.clear()
             joint_position = copy.deepcopy(self.joint_position)
-            ordered_joints = self._get_joint_ordered_value_list(joint_position)
             position_reached = np.isclose(goal_joint_position, self._get_joint_ordered_value_list(joint_position), atol=0.05).all()
             self.get_state_event.set()
 
@@ -352,7 +356,7 @@ class UrRosBridge:
             cmd = position_cmd[idx]
             max_vel = self.joint_velocity_limits[name]
             dur.append(max(abs(cmd-pos)/max_vel, self.min_traj_duration))
-        msg.points[0].time_from_start = rclpy.duration.Duration(seconds=max(dur)).to_msg()
+        msg.points[0].time_from_start = Duration(seconds=max(dur)).to_msg()
         self.arm_cmd_pub.publish(msg)
         time.sleep(1/self.rate)
         return position_cmd
@@ -375,7 +379,7 @@ class UrRosBridge:
             dur.append(max(abs(cmd)/max_vel, self.min_traj_duration))
             position_cmd.append(pos + cmd)
         msg.points[0].positions = position_cmd
-        msg.points[0].time_from_start = rclpy.duration.Duration.from_sec(max(dur)).to_msg()
+        msg.points[0].time_from_start = Duration.from_sec(max(dur)).to_msg()
         self.arm_cmd_pub.publish(msg)
         time.sleep(1/self.rate)
         return position_cmd

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -21,13 +23,14 @@ class JointTrajectoryCH(Node):
             topic = f'{self.robot_model}/commands/joint_group'
             self.jt_pub = self.create_publisher(JointGroupCommand, topic, 10)
         else:
-            topic = f'{self.robot_model}/arm_controller/command'
+            topic = f'{self.robot_model}/arm_controller/joint_trajectory'
             self.jt_pub = self.create_publisher(JointTrajectory, topic, 10)
 
         self.create_subscription(JointTrajectory, 'env_arm_command', self.callback_env_joint_trajectory, 10)
 
         self.queue = Queue(maxsize=1)
         self.stop_flag = False
+        self.joints = []
 
         self.timer = self.create_timer(1.0 / ac_rate, self.joint_trajectory_publisher)
 
@@ -40,6 +43,7 @@ class JointTrajectoryCH(Node):
     def joint_trajectory_publisher(self):
         if self.queue.full():
             traj_msg = self.queue.get()
+            self.get_logger().debug(f'Sending trajectory: {traj_msg}')
             if self.real_robot:
                 if traj_msg.points:
                     cmd_msg = JointGroupCommand()
@@ -47,14 +51,19 @@ class JointTrajectoryCH(Node):
                     cmd_msg.cmd = list(traj_msg.points[0].positions)
                     self.jt_pub.publish(cmd_msg)
             else:
+                self.get_logger().debug('Publishing joint trajectory...')
                 self.jt_pub.publish(traj_msg)
             self.stop_flag = False
+            self.joints = list(traj_msg.joint_names)
         else:
             if not self.stop_flag:
                 if self.real_robot:
                     self.jt_pub.publish(JointGroupCommand())
                 else:
-                    self.jt_pub.publish(JointTrajectory())
+                    self.get_logger().debug('Publishing empty joint trajectory...')
+                    cmd = JointTrajectory()
+                    cmd.joint_names = self.joints
+                    self.jt_pub.publish(cmd)
                 self.stop_flag = True
 
 

@@ -1,13 +1,12 @@
 <?xml version="1.0" ?>
 <sdf version="1.8">
-  <world name="default">
+  <world name="tabletop_sphere50_no_collision">
 
     <physics name="1ms" type="ignored">
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
       <real_time_update_rate>1000</real_time_update_rate>
     </physics>
-    <gravity>0.0 0.0 9.8</gravity>
     <plugin
       filename="ignition-gazebo-physics-system"
       name="ignition::gazebo::systems::Physics">

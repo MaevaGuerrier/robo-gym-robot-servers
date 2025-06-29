@@ -17,10 +17,19 @@
   <xacro:arg name="use_world_frame"                 default="false"/>
   <xacro:arg name="external_urdf_loc"               default=""/>
   <xacro:arg name="hardware_type"                   default="actual"/>
+  <xacro:arg name="sim_ignition"                    default="true"/>
+  <xacro:arg name="simulation_controllers"          default="" />
+  <xacro:arg name="x"                               default="0.0"/>
+  <xacro:arg name="y"                               default="0.0"/>
+  <xacro:arg name="z"                               default="0.0"/>
+  <xacro:arg name="roll"                            default="0.0"/>
+  <xacro:arg name="pitch"                           default="0.0"/>
+  <xacro:arg name="yaw"                             default="0.0"/>
 
   <xacro:property name="mesh_directory"             value="package://interbotix_xsarm_descriptions/meshes/${robot_model}_meshes"/>
   <xacro:property name="urdf_loc"                   value="$(arg external_urdf_loc)"/>
   <xacro:property name="hardware_type"              value="$(arg hardware_type)"/>
+  <xacro:property name="sim_ignition"               value="$(arg sim_ignition)"/>
   <xacro:property name="pi_offset"                  value="0.00001"/>
 
   <xacro:property name="waist_limit_effort"         value="8"/>
@@ -66,6 +75,7 @@
         link="world"/>
       <child
         link="$(arg robot_name)/$(arg base_link_frame)"/>
+      <origin xyz="$(arg x) $(arg y) $(arg z)" rpy="$(arg roll) $(arg pitch) $(arg yaw)" />
     </joint>
   </xacro:if> <!-- use_world_frame -->
 
@@ -702,11 +712,22 @@
 
   </xacro:if> <!-- use_gripper -->
 
-  <xacro:include filename="$(find interbotix_xsarm_descriptions)/urdf/control.urdf.xacro"/>
+  <xacro:include filename="$(find interbotix_arm_robot_server)/urdf/control.urdf.xacro"/>
   <xacro:include filename="$(find interbotix_xsarm_descriptions)/urdf/gazebo_configs.urdf.xacro"/>
 
   <xacro:if value="${hardware_type == 'gz_classic'}">
     <xacro:gazebo_configs/>
+  </xacro:if>
+  <xacro:if value="$(arg sim_ignition)">
+    <!-- Gazebo plugins -->
+    <gazebo reference="world">
+    </gazebo>
+    <gazebo>
+      <plugin filename="libign_ros2_control-system.so" name="ign_ros2_control::IgnitionROS2ControlPlugin">
+        <parameters>$(arg simulation_controllers)</parameters>
+        <controller_manager_node_name>$(arg tf_prefix)controller_manager</controller_manager_node_name>
+      </plugin>
+    </gazebo>
   </xacro:if>
 
   <xacro:if value="${urdf_loc != ''}">

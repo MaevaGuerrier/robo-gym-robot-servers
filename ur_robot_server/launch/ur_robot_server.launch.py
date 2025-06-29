@@ -1,18 +1,14 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
-from launch.substitutions import PathJoinSubstitution, LaunchConfiguration, TextSubstitution, PythonExpression
-from launch.event_handlers import OnProcessExit
+from launch.substitutions import PathJoinSubstitution, LaunchConfiguration, PythonExpression
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     OpaqueFunction,
-    RegisterEventHandler,
 )
 
 
@@ -32,7 +28,9 @@ def launch_setup(context, *args, **kwargs):
         "'true' if '", LaunchConfiguration('gui'), "' == 'true' and '",
         LaunchConfiguration('rviz_gui'), "' == 'true' else 'false'"
     ])
-
+    world_name_split= PythonExpression([
+        "'", LaunchConfiguration('world_name'), "'.replace('.world', '')"
+    ])
     robot_sim = IncludeLaunchDescription(
         condition=UnlessCondition(LaunchConfiguration('real_robot')),
         launch_description_source=PythonLaunchDescriptionSource(
@@ -44,11 +42,26 @@ def launch_setup(context, *args, **kwargs):
                 ])
             ),
             launch_arguments={
+                'robot_description_file': LaunchConfiguration('robot_description_file'),
+                'robot_description_package': LaunchConfiguration('robot_description_package'),
                 'gui': LaunchConfiguration('gui'),
                 'gazebo_gui': gui_and_gazebo_gui,
                 'launch_rviz': gui_and_rviz_gui,
                 'ur_tyoe': LaunchConfiguration('ur_model'),
                 'world_file': LaunchConfiguration('world_name'),
+                'x': LaunchConfiguration('x'),
+                'y': LaunchConfiguration('y'),
+                'z': LaunchConfiguration('z'),
+                'roll': LaunchConfiguration('roll'),
+                'pitch': LaunchConfiguration('pitch'),
+                'yaw': LaunchConfiguration('yaw'),
+                'camera1_gazebo': LaunchConfiguration('camera1_gazebo'),
+                'camera1_link_x': LaunchConfiguration('camera1_link_x'),
+                'camera1_link_y': LaunchConfiguration('camera1_link_y'),
+                'camera1_link_z': LaunchConfiguration('camera1_link_z'),
+                'camera1_link_roll': LaunchConfiguration('camera1_link_roll'),
+                'camera1_link_pitch': LaunchConfiguration('camera1_link_pitch'),
+                'camera1_link_yaw': LaunchConfiguration('camera1_link_yaw'),
             }.items()
         )
     nodes = [
@@ -85,7 +98,13 @@ def launch_setup(context, *args, **kwargs):
                 'target_mode': LaunchConfiguration('target_mode'),
                 'rs_mode': LaunchConfiguration('rs_mode'),
                 'action_mode': LaunchConfiguration('action_mode'),
-                'use_voxel_occupancy': LaunchConfiguration('use_voxel_occupancy')
+                'use_voxel_occupancy': LaunchConfiguration('use_voxel_occupancy'),
+                'n_objects': LaunchConfiguration('n_objects'),
+                'object_0_frame': LaunchConfiguration('object_0_frame'),
+                'object_1_frame': LaunchConfiguration('object_1_frame'),
+                'object_0_model_name': LaunchConfiguration('object_0_model_name'),
+                'object_1_model_name': LaunchConfiguration('object_1_model_name'),
+                'objects_controller': LaunchConfiguration('objects_controller'),
             }],
             output='screen'
         ),
@@ -103,6 +122,7 @@ def launch_setup(context, *args, **kwargs):
                 'object_1_frame': LaunchConfiguration('object_1_frame'),
                 'object_0_model_name': LaunchConfiguration('object_0_model_name'),
                 'object_0_frame': LaunchConfiguration('object_0_frame'),
+                'world_name': world_name_split,
             }],
             output='screen'
         ),
@@ -128,13 +148,6 @@ def generate_launch_description():
         "'", LaunchConfiguration('ur_model'), "_controllers.yaml'"
     ])
 
-    robot_description_file = PathJoinSubstitution([
-        FindPackageShare('ur_robot_server'),
-        'launch',
-        'inc',
-        robot_description_filename
-    ])
-
     declared_arguments = [
         DeclareLaunchArgument('ur_model', default_value='ur5e'),
         DeclareLaunchArgument('real_robot', default_value='false'),
@@ -154,7 +167,7 @@ def generate_launch_description():
         DeclareLaunchArgument("initial_joint_controller", default_value="joint_trajectory_controller", description="Robot controller to start."),
         DeclareLaunchArgument('use_voxel_occupancy', default_value='false'),
         DeclareLaunchArgument('objects_controller', default_value='false'),
-        DeclareLaunchArgument('n_objects', default_value='0.0'),
+        DeclareLaunchArgument('n_objects', default_value='0'),
         DeclareLaunchArgument('object_trajectory_file_name', default_value='no_file'),
         DeclareLaunchArgument('object_0_model_name', default_value=''),
         DeclareLaunchArgument('object_0_frame', default_value='target'),
@@ -176,7 +189,8 @@ def generate_launch_description():
         DeclareLaunchArgument('camera1_link_roll', default_value='0.0'),
         DeclareLaunchArgument('camera1_link_pitch', default_value='0.0'),
         DeclareLaunchArgument('camera1_link_yaw', default_value='0.0'),
-        DeclareLaunchArgument('robot_description_file', default_value=robot_description_file),
+        DeclareLaunchArgument('robot_description_file', default_value="ur.urdf.xacro"),
+        DeclareLaunchArgument('robot_description_package', default_value="ur_robot_server"),
         DeclareLaunchArgument('joint_limit_params', default_value=PathJoinSubstitution([
             FindPackageShare('ur_description'),
             'config',

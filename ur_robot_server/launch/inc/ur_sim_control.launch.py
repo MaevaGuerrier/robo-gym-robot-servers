@@ -33,16 +33,15 @@ from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     OpaqueFunction,
-    RegisterEventHandler,
 )
 from launch.conditions import IfCondition, UnlessCondition
-from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     Command,
     FindExecutable,
     LaunchConfiguration,
     PathJoinSubstitution,
+    PythonExpression,
 )
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -65,6 +64,19 @@ def launch_setup(context, *args, **kwargs):
     launch_rviz = LaunchConfiguration("launch_rviz")
     gazebo_gui = LaunchConfiguration("gazebo_gui")
     world_file = LaunchConfiguration("world_file")
+    x=LaunchConfiguration("x")
+    y=LaunchConfiguration("y")
+    z=LaunchConfiguration("z")
+    roll=LaunchConfiguration("roll")
+    pitch=LaunchConfiguration("pitch")
+    yaw=LaunchConfiguration("yaw")
+    camera_gazebo=LaunchConfiguration("camera_gazebo")
+    camera_link_x=LaunchConfiguration("camera_link_x")
+    camera_link_y=LaunchConfiguration("camera_link_y")
+    camera_link_z=LaunchConfiguration("camera_link_z")
+    camera_link_roll=LaunchConfiguration("camera_link_roll")
+    camera_link_pitch=LaunchConfiguration("camera_link_pitch")
+    camera_link_yaw=LaunchConfiguration("camera_link_yaw")
 
     initial_joint_controllers = PathJoinSubstitution(
         [FindPackageShare(runtime_config_package), "config", controllers_file]
@@ -100,6 +112,45 @@ def launch_setup(context, *args, **kwargs):
             " ",
             "simulation_controllers:=",
             initial_joint_controllers,
+            " ",
+            "x:=",
+            x,
+            " ",
+            "y:=",
+            y,
+            " ",
+            "z:=",
+            z,
+            " ",
+            "roll:=",
+            roll,
+            " ",
+            "pitch:=",
+            pitch,
+            " ",
+            "yaw:=",
+            yaw,
+            " ",
+            "camera_gazebo:=",
+            camera_gazebo,
+            " ",
+            "camera_link_x:=",
+            camera_link_x,
+            " ",
+            "camera_link_y:=",
+            camera_link_y,
+            " ",
+            "camera_link_z:=",
+            camera_link_z,
+            " ",
+            "camera_link_roll:=",
+            camera_link_roll,
+            " ",
+            "camera_link_pitch:=",
+            camera_link_pitch,
+            " ",
+            "camera_link_yaw:=",
+            camera_link_yaw
         ]
     )
     robot_description = {"robot_description": robot_description_content}
@@ -160,13 +211,16 @@ def launch_setup(context, *args, **kwargs):
         launch_arguments={"gz_args": [" -s -r -v 4 ", world_file]}.items(),
         condition=UnlessCondition(gazebo_gui),
     )
+    world_name_split = PythonExpression([
+        "'", LaunchConfiguration('world_file'), "'.replace('.world', '')"
+    ])
 
-    # Make the /clock topic available in ROS
     gz_sim_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
         arguments=[
             "/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock",
+            f"/world/{world_name_split.perform(context)}/set_pose@ros_gz_interfaces/srv/SetEntityPose",
         ],
         output="screen",
     )
@@ -297,6 +351,97 @@ def generate_launch_description():
             "world_file",
             default_value="empty.sdf",
             description="Gazebo world file (absolute path or filename from the gazebosim worlds collection) containing a custom world.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "x",
+            default_value="0.0",
+            description="x coordinate of the robot with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "y",
+            default_value="0.0",
+            description="y coordinate of the robot with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "z",
+            default_value="0.0",
+            description="z coordinate of the robot with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "roll",
+            default_value="0.0",
+            description="roll of the robot with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "pitch",
+            default_value="0.0",
+            description="pitch of the robot with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "yaw",
+            default_value="0.0",
+            description="yaw of the robot with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_gazebo",
+            default_value="False",
+            description="use camera gazebo simulated sensor",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_link_x",
+            default_value="0.0",
+            description="camera_link x coordinate with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_link_y",
+            default_value="0.0",
+            description="camera_link y coordinate with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_link_z",
+            default_value="0.1",
+            description="camera_link z coordinate with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_link_roll",
+            default_value="0.0",
+            description="camera_link roll with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_link_pitch",
+            default_value="0.0",
+            description="camera_link pitch with respect to the world frame",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_link_yaw",
+            default_value="0.0",
+            description="camera_link yaw with respect to the world frame",
         )
     )
 

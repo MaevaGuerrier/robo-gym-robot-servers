@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -23,19 +25,15 @@ class InterbotixArmRosBridge:
 
     def __init__(self, node):
         self.node = node
-
+        self.node.get_logger().info('Initializing InterbotixArmRosBridge...')
         self.reset = Event()
         self.reset.clear()
         self.get_state_event = Event()
         self.get_state_event.set()
-        
-        default_ee_frame = self.robot_model + '/gripper_bar_link'
-        self.node.declare_parameter('real_robot', False)
-        self.node.declare_parameter('robot_model', 'rx150')
+
         self.node.declare_parameter('action_cycle_rate', 125.0)
         self.node.declare_parameter('max_velocity_scale_factor', 1.0)
         self.node.declare_parameter('reference_frame', 'base')
-        self.node.declare_parameter('ee_frame', default_ee_frame)
         self.node.declare_parameter('rs_mode', '')
         self.node.declare_parameter('target_mode', '1object')
         self.node.declare_parameter('action_mode', 'abs_pos')
@@ -45,9 +43,11 @@ class InterbotixArmRosBridge:
 
         self.real_robot = self.node.get_parameter('real_robot').value
         self.robot_model = self.node.get_parameter('robot_model').value
+        default_ee_frame = self.robot_model + '/gripper_bar_link'
+
+        self.node.declare_parameter('ee_frame', default_ee_frame)
         self.target = [0.0] * 3
 
-        self.target = [0.0] * 3
         # Joint States
         if self.robot_model == 'rx150' or self.robot_model == 'wx250' or self.obot_model == 'px150' or self.robot_model == 'rx200' or self.robot_model == 'vx250' or self.robot_model == 'vx300' or self.robot_model == 'wx200' or self.robot_model == 'wx250':
             self.dof = 5
@@ -74,7 +74,7 @@ class InterbotixArmRosBridge:
         self.joint_position = dict.fromkeys(self.joint_names, 0.0)
         self.joint_velocity = dict.fromkeys(self.joint_names, 0.0)
 
-        self.node.create_subscription(JointState, self.robot_model + "/joint_states", self._on_joint_states, 10)
+        self.node.create_subscription(JointState,  "/joint_states", self._on_joint_states, 10)
         self.target_pub = self.node.create_publisher(Marker, 'target_marker', 10)
         self.arm_cmd_pub = self.node.create_publisher(JointTrajectory, 'env_arm_command', 10)
 
@@ -86,12 +86,11 @@ class InterbotixArmRosBridge:
         self.joint_velocity_limits = self._get_joint_velocity_limits()
 
         self.reference_frame = self.node.get_parameter('reference_frame').value
-        self.ee_frame = self.node.get_parameter('ee_frame').value
-        self.node.get_logger().info(f"ee frame: {self.ee_frame}")
+        self.ee_frame = self.robot_model + '/' + self.node.get_parameter('ee_frame').value
 
         self.tf2_buffer = Buffer()
-        self.tf2_listener = TransformListener(self.tf2_buffer, self)
-        self.static_tf2_broadcaster = StaticTransformBroadcaster(self)
+        self.tf2_listener = TransformListener(self.tf2_buffer, self.node)
+        self.static_tf2_broadcaster = StaticTransformBroadcaster(self.node)
 
         self.path_frame = self.robot_model + '/base_link'
 
@@ -109,7 +108,7 @@ class InterbotixArmRosBridge:
             self.node.create_subscription(ContactsState, str(self.robot_model) + "/shoulder_collision", self._on_shoulder_collision, 10)
             self.node.create_subscription(ContactsState, str(self.robot_model) + "/upper_arm_collision", self._on_upper_arm_collision, 10)
             self.node.create_subscription(ContactsState, str(self.robot_model) + "/wrist_collision", self._on_forearm_collision, 10)
-            self.node.create_subscription(ContactsState, str(self.robot_model) + "/gripper_collision", self._on_wrist_1_collision, 10)
+            self.node.create_subscription(ContactsState, str(self.robot_model) + "/gripper_collision", self._on_wrist_collision, 10)
 
             if self.dof == 6:
                 self.node.create_subscription(ContactsState, str(self.robot_model) + "/upper_forearm_collision", self._on_upper_forearm_collision, 10)
@@ -118,7 +117,7 @@ class InterbotixArmRosBridge:
             elif self.dof == 5:
                 self.node.create_subscription(ContactsState, str(self.robot_model) + "/forearm_collision", self._on_forearm_collision, 10)
 
-        self.rs_mode = self.node.get_parameter('rs_mode').value or self.get_parameter('target_mode').value
+        self.rs_mode = self.node.get_parameter('rs_mode').value or self.node.get_parameter('target_mode').value
         self.action_mode = self.node.get_parameter('action_mode').value
         self.objects_controller = self.node.get_parameter('objects_controller').value
         self.n_objects = self.node.get_parameter('n_objects').value
@@ -127,14 +126,15 @@ class InterbotixArmRosBridge:
             self.move_objects_pub = self.node.create_publisher(Bool, 'move_objects', 10)
             self.objects_model_name = []
             for i in range(self.n_objects):
+                self.node.declare_parameter(f"object_{i}_model_name", '')
                 self.objects_model_name.append(self.node.get_parameter(f"object_{i}_model_name").value)
-        # Get objects TF Frame
+
         self.objects_frame = []
         for i in range(self.n_objects):
-            self.node.declare_parameter(f"object_{i}_frame", '')
+            self.node.declare_parameter(f"object_{i}_frame", 'target')
             self.objects_frame.append(self.node.get_parameter(f"object_{i}_frame").value)
 
-        self.use_voxel_occupancy = self.get_parameter('use_voxel_occupancy').value
+        self.use_voxel_occupancy = self.node.get_parameter('use_voxel_occupancy').value
         if self.use_voxel_occupancy: 
             self.node.create_subscription(Int32MultiArray, 'occupancy_state', self._on_occupancy_state, 10)
             if self.rs_mode == '1moving1point_2_2_4_voxel':
@@ -155,7 +155,7 @@ class InterbotixArmRosBridge:
             state_dict.update(self._get_joint_states_dict(joint_position, joint_velocity))
 
             # ee to ref transform
-            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.Time(0))
+            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.time.Time())
             ee_to_ref_trans_list = self._transform_to_list(ee_to_ref_trans)
             state += ee_to_ref_trans_list
             state_dict.update(self._get_transform_dict(ee_to_ref_trans, 'ee_to_ref'))
@@ -167,11 +167,10 @@ class InterbotixArmRosBridge:
 
         elif self.rs_mode == '1object':
             # Object 0 Pose 
-            object_0_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.objects_frame[0], rclpy.Time(0))
+            object_0_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.objects_frame[0], rclpy.time.Time())
             object_0_trans_list = self._transform_to_list(object_0_trans)
             state += object_0_trans_list
             state_dict.update(self._get_transform_dict(object_0_trans, 'object_0_to_ref'))
-
             # Joint Positions and Joint Velocities
             joint_position = copy.deepcopy(self.joint_position)
             joint_velocity = copy.deepcopy(self.joint_velocity)
@@ -180,7 +179,7 @@ class InterbotixArmRosBridge:
             state_dict.update(self._get_joint_states_dict(joint_position, joint_velocity))
 
             # ee to ref transform
-            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.Time(0))
+            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.time.Time())
             ee_to_ref_trans_list = self._transform_to_list(ee_to_ref_trans)
             state += ee_to_ref_trans_list
             state_dict.update(self._get_transform_dict(ee_to_ref_trans, 'ee_to_ref'))
@@ -193,7 +192,7 @@ class InterbotixArmRosBridge:
         elif self.rs_mode == '1moving2points':
             # Object 0 Pose
             object_0_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.objects_frame[0],
-                                                              rclpy.Time(0))
+                                                              rclpy.time.Time())
             object_0_trans_list = self._transform_to_list(object_0_trans)
             state += object_0_trans_list
             state_dict.update(self._get_transform_dict(object_0_trans, 'object_0_to_ref'))
@@ -206,7 +205,7 @@ class InterbotixArmRosBridge:
             state_dict.update(self._get_joint_states_dict(joint_position, joint_velocity))
 
             # ee to ref transform
-            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.Time(0))
+            ee_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, self.ee_frame, rclpy.time.Time())
             ee_to_ref_trans_list = self._transform_to_list(ee_to_ref_trans)
             state += ee_to_ref_trans_list
             state_dict.update(self._get_transform_dict(ee_to_ref_trans, 'ee_to_ref'))
@@ -217,7 +216,7 @@ class InterbotixArmRosBridge:
             state_dict['in_collision'] = float(0)
 
             # forearm to ref transform
-            forearm_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, str(self.robot_model) + '/forearm_link', rclpy.Time(0))
+            forearm_to_ref_trans = self.tf2_buffer.lookup_transform(self.reference_frame, str(self.robot_model) + '/forearm_link', rclpy.time.Time())
             forearm_to_ref_trans_list = self._transform_to_list(forearm_to_ref_trans)
             state += forearm_to_ref_trans_list
             state_dict.update(self._get_transform_dict(forearm_to_ref_trans, 'forearm_to_ref'))
@@ -226,41 +225,44 @@ class InterbotixArmRosBridge:
                     
         self.get_state_event.set()
 
-        # Create and fill State message
         msg = robot_server_pb2.State(state=state, state_dict=state_dict, success=True)
        
         return msg
 
     def set_state(self, state_msg):
-        # Set target internal value
-        self.target = [state_msg.float_params['object_0_x'], state_msg.float_params['object_0_y'],
-                       state_msg.float_params['object_0_z']]
-        # Publish Target Marker
+        if 'object_0_x' in state_msg.float_params and 'object_0_y' in state_msg.float_params and 'object_0_z' in state_msg.float_params:
+            self.target = [state_msg.float_params['object_0_x'], state_msg.float_params['object_0_y'], state_msg.float_params['object_0_z']]
+
         self.publish_target_marker(self.target)
 
         if all(j in state_msg.state_dict for j in self.joint_position_names):
             state_dict = True
         else:
-            state_dict = False 
-
-        # Clear reset Event
+            state_dict = False
         self.reset.clear()
 
-        # Setup Objects movement
         if self.objects_controller:
-            # Stop movement of objects
             msg = Bool()
             msg.data = False
             self.move_objects_pub.publish(msg)
 
-            # Loop through all the string_params and float_params and set them as ROS parameters
-            string_params = [rclpy.parameter.Parameter(param, rclpy.parameter.Parameter.Type.STRING, state_msg.string_params[param]) 
-                            for param in state_msg.string_params]
+            if state_msg.string_params:
+                for param_name, param_value in state_msg.string_params.items():
+                    if not self.node.has_parameter(param_name):
+                        self.node.declare_parameter(param_name, param_value)
+                    else:
+                        self.node.set_parameters([
+                            rclpy.parameter.Parameter(param_name, rclpy.parameter.Parameter.Type.STRING, param_value)
+                        ])
+            if state_msg.float_params:
+                for param_name, param_value in state_msg.float_params.items():
+                    if not self.node.has_parameter(param_name):
+                        self.node.declare_parameter(param_name, param_value)
+                    else:
+                        self.node.set_parameters([
+                            rclpy.parameter.Parameter(param_name, rclpy.parameter.Parameter.Type.DOUBLE, param_value)
+                        ])
 
-            float_params = [rclpy.parameter.Parameter(param, rclpy.parameter.Parameter.Type.DOUBLE, state_msg.float_params[param]) 
-                            for param in state_msg.float_params]
-
-            self.node.set_parameters(string_params + float_params)
 
         # Interbotix Joints Positions
         if state_dict:
@@ -277,7 +279,6 @@ class InterbotixArmRosBridge:
                                             state_msg.state_dict['elbow_joint_position'], state_msg.state_dict['wrist_angle_joint_position']]
         else:
             goal_joint_position = state_msg.state[6:12]
-
         self.set_joint_position(goal_joint_position)
         
         if not self.real_robot:
@@ -304,18 +305,18 @@ class InterbotixArmRosBridge:
         t_marker.scale.y = 0.15
         t_marker.scale.z = 0.15
         t_marker.action = 0
-        t_marker.frame_locked = 1
+        t_marker.frame_locked = True
         t_marker.pose.position.x = target_pose[0]
         t_marker.pose.position.y = target_pose[1]
         t_marker.pose.position.z = target_pose[2]
-        rpy_orientation = PyKDL.Rotation.RPY(0.0, 0.0, target_pose[2])
+        rpy_orientation = PyKDL.Rotation.RPY(0.0, 0.0, 0.0)
         q_orientation = rpy_orientation.GetQuaternion()
         t_marker.pose.orientation.x = q_orientation[0]
         t_marker.pose.orientation.y = q_orientation[1]
         t_marker.pose.orientation.z = q_orientation[2]
         t_marker.pose.orientation.w = q_orientation[3]
         t_marker.id = 0
-        t_marker.header.stamp = rclpy.Time.now()
+        t_marker.header.stamp = rclpy.time.Time().to_msg()
         t_marker.header.frame_id = self.path_frame
         t_marker.color.a = 1.0
         t_marker.color.r = 0.0
@@ -363,9 +364,9 @@ class InterbotixArmRosBridge:
             cmd = position_cmd[idx]
             max_vel = self.joint_velocity_limits[name]
             dur.append(max(abs(cmd-pos)/max_vel, self.min_traj_duration))
-        msg.points[0].time_from_start = rclpy.duration.Duration(seconds=max(dur))
+        msg.points[0].time_from_start = Duration(seconds=max(dur)).to_msg()
         self.arm_cmd_pub.publish(msg)
-        self.control_rate.sleep()
+        time.sleep(1/self.rate)
         return position_cmd
 
     def publish_env_arm_delta_cmd(self, delta_cmd):
@@ -386,9 +387,9 @@ class InterbotixArmRosBridge:
             dur.append(max(abs(cmd)/max_vel, self.min_traj_duration))
             position_cmd.append(pos + cmd)
         msg.points[0].positions = position_cmd
-        msg.points[0].time_from_start = rclpy.duration.Duration(seconds=max(dur))
+        msg.points[0].time_from_start = Duration.from_sec(max(dur)).to_msg()
         self.arm_cmd_pub.publish(msg)
-        self.control_rate.sleep()
+        time.sleep(1/self.rate)
         return position_cmd
 
     def _on_joint_states(self, msg):
