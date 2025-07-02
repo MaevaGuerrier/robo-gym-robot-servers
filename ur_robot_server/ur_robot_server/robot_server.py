@@ -62,7 +62,7 @@ class RobotServerNode(Node):
         self.serve()
 
     def serve(self):
-        self.get_logger().info('Starting gRPC server...')
+        self.get_logger().info('Starting UR Robot Server...')
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         robot_server_pb2_grpc.add_RobotServerServicer_to_server(
             RobotServerServicer(self),

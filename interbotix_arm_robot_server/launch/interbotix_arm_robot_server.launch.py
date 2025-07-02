@@ -61,6 +61,7 @@ def launch_setup(context, *args, **kwargs):
             'show_ar_tag': LaunchConfiguration('show_ar_tag'),
             'show_gripper_bar': LaunchConfiguration('show_gripper_bar'),
             'show_gripper_fingers': LaunchConfiguration('show_gripper_fingers'),
+            'controllers_file': LaunchConfiguration('controllers_file'),
         }.items()
         )
     nodes = [
@@ -171,13 +172,11 @@ def generate_launch_description():
         DeclareLaunchArgument('object_0_frame', default_value=''),
         DeclareLaunchArgument('object_1_model_name', default_value=''),
         DeclareLaunchArgument('object_1_frame', default_value=''),
-        DeclareLaunchArgument('rviz_config_file', default_value='ur_rl.rviz'),
         DeclareLaunchArgument('base_link_frame', default_value='base_link'),
         DeclareLaunchArgument('show_ar_tag', default_value='false'),
         DeclareLaunchArgument('show_gripper_bar', default_value='true'),
         DeclareLaunchArgument('show_gripper_fingers', default_value='true'),
         DeclareLaunchArgument('use_world_frame', default_value='true'),
-        DeclareLaunchArgument('external_urdf_loc', default_value=''),
         DeclareLaunchArgument('rviz_config_path', default_value=PathJoinSubstitution([
             FindPackageShare('interbotix_arm_robot_server'), 'rviz'])),
         DeclareLaunchArgument('rviz_config_file', default_value='interbotix_rl.rviz'),

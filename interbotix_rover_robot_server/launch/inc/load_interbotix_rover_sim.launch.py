@@ -1,45 +1,169 @@
-from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, SetEnvironmentVariable
-from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration, ThisLaunchFileDir, PathJoinSubstitution
-from launch_ros.actions import Node
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 import os
-
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable, OpaqueFunction
+from launch.conditions import IfCondition, UnlessCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Command, FindExecutable, PythonExpression
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
+import launch_ros.descriptions
 
-def generate_launch_description():
+
+def launch_setup(context, *args, **kwargs):
     robot_model = LaunchConfiguration('robot_model')
     robot_name = LaunchConfiguration('robot_name')
+    show_ar_tag = LaunchConfiguration("show_ar_tag")
     arm_model = LaunchConfiguration('arm_model')
     show_gripper_bar = LaunchConfiguration('show_gripper_bar')
     show_gripper_fingers = LaunchConfiguration('show_gripper_fingers')
     use_world_frame = LaunchConfiguration('use_world_frame')
-    external_urdf_loc = LaunchConfiguration('external_urdf_loc')
-    use_rviz = LaunchConfiguration('use_rviz')
-    gui = LaunchConfiguration('gui')
-    gazebo_world = LaunchConfiguration('gazebo_world')
-    debug = LaunchConfiguration('debug')
-    paused = LaunchConfiguration('paused')
-    recording = LaunchConfiguration('recording')
-    use_sim_time = LaunchConfiguration('use_sim_time')
-    use_position_controllers = LaunchConfiguration('use_position_controllers')
-    use_trajectory_controllers = LaunchConfiguration('use_trajectory_controllers')
-    dof = LaunchConfiguration('dof')
+    world_name = LaunchConfiguration("world_name")
+    x = LaunchConfiguration("x")
+    y = LaunchConfiguration("y")
+    z = LaunchConfiguration("z")
+    yaw = LaunchConfiguration("yaw")
+    camera_gazebo = LaunchConfiguration("camera_gazebo")
+    camera_link_x = LaunchConfiguration("camera_link_x")
+    camera_link_y = LaunchConfiguration("camera_link_y")
+    camera_link_z = LaunchConfiguration("camera_link_z")
+    camera_link_roll = LaunchConfiguration("camera_link_roll")
+    camera_link_pitch = LaunchConfiguration("camera_link_pitch")
+    camera_link_yaw = LaunchConfiguration("camera_link_yaw")
+    robot_description_filename = LaunchConfiguration("robot_description_filename")
+    controllers_file = LaunchConfiguration("controllers_file")
+    hardware_type = LaunchConfiguration("hardware_type")
+    base_model = LaunchConfiguration("base_model")
 
-    interbotix_gazebo_dir = get_package_share_directory('interbotix_xslocobot_gazebo')
+    mesh_path = FindPackageShare('interbotix_xslocobot_descriptions').perform(context)
 
-    return LaunchDescription([
-        DeclareLaunchArgument('robot_model', default_value=''),
-        DeclareLaunchArgument('robot_name', default_value=robot_model),
+    share_path = os.path.dirname(mesh_path)
+    initial_joint_controllers = PathJoinSubstitution(
+        [FindPackageShare('interbotix_rover_robot_server'), "config", controllers_file]
+    )
+
+    robot_description_content = Command(
+        [
+            PathJoinSubstitution([FindExecutable(name="xacro")]),
+            " ",
+            PathJoinSubstitution(
+                [FindPackageShare('interbotix_rover_robot_server'), 'urdf', robot_description_filename]
+        ),
+        ' robot_name:=', robot_name,
+        ' robot_model:=', robot_model,
+        ' arm_model:=', arm_model,
+        ' show_ar_tag:=', show_ar_tag,
+        ' show_gripper_bar:=', show_gripper_bar,
+        ' show_gripper_fingers:=', show_gripper_fingers,
+        ' use_world_frame:=', use_world_frame,
+        ' x:=', x,
+        ' y:=', y,
+        ' z:=', z,
+        ' yaw:=', yaw,
+        ' camera1_gazebo:=', camera_gazebo,
+        ' camera1_link_x:=', camera_link_x,
+        ' camera1_link_y:=', camera_link_y,
+        ' camera1_link_z:=', camera_link_z,
+        ' camera1_link_roll:=', camera_link_roll,
+        ' camera1_link_pitch:=', camera_link_pitch,
+        ' camera1_link_yaw:=', camera_link_yaw,
+        ' simulation_controllers:=', initial_joint_controllers,
+        ' hardware_type:=', hardware_type,
+    ])
+
+    robot_description = {"robot_description": launch_ros.descriptions.ParameterValue(robot_description_content)}
+
+    robot_state_publisher_node = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="both",
+        parameters=[{"use_sim_time": True}, robot_description],
+    )
+
+    joint_state_broadcaster_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster", "--controller-manager", "controller_manager"],
+    )
+
+    initial_joint_controller_spawner_started = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["arm_controller", "gripper_controller", "diffdrive_controller", "-c", "controller_manager"],
+    )
+
+    gz_spawn_entity = Node(
+        package="ros_gz_sim",
+        executable="create",
+        output="screen",
+        arguments=[
+            "-string",
+            robot_description_content,
+            "-name",
+            "interbotix_rover",
+            "-allow_renaming",
+            "true",
+            "-z",
+            z,
+        ],
+    )
+
+    gz_launch_description_with_gui = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
+        ),
+        launch_arguments={"gz_args": [" -r -v 4 ", world_name]}.items(),
+        condition=IfCondition(LaunchConfiguration('gazebo_gui')),
+    )
+
+    gz_launch_description_without_gui = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
+        ),
+        launch_arguments={"gz_args": [" -s -r -v 4 ", world_name]}.items(),
+        condition=UnlessCondition(LaunchConfiguration('gazebo_gui')),
+    )
+
+    world_name_split = PythonExpression([
+        "'", LaunchConfiguration('world_name'), "'.replace('.world', '')"
+    ])
+
+    gz_sim_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        arguments=[
+            "/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock",
+            f"/world/{world_name_split.perform(context)}/set_pose@ros_gz_interfaces/srv/SetEntityPose",
+        ],
+        output="screen",
+    )
+
+    nodes_to_start = [
+        SetEnvironmentVariable(name='IGN_GAZEBO_RESOURCE_PATH', value=share_path),
+        joint_state_broadcaster_spawner,
+        initial_joint_controller_spawner_started,
+        robot_state_publisher_node,
+        gz_spawn_entity,
+        gz_launch_description_with_gui,
+        gz_launch_description_without_gui,
+        gz_sim_bridge,
+    ]
+    return nodes_to_start
+
+def generate_launch_description():
+
+    declared_arguments = [
+        DeclareLaunchArgument('robot_model', default_value='', description='Robot model name'),
+        DeclareLaunchArgument('robot_name', default_value=LaunchConfiguration('robot_model'), description='Robot name'),
         DeclareLaunchArgument('arm_model', default_value=''),
         DeclareLaunchArgument('show_gripper_bar', default_value='true'),
         DeclareLaunchArgument('show_gripper_fingers', default_value='true'),
+        DeclareLaunchArgument('show_ar_tag', default_value='true'),
         DeclareLaunchArgument('use_world_frame', default_value='true'),
         DeclareLaunchArgument('external_urdf_loc', default_value=''),
         DeclareLaunchArgument('use_rviz', default_value='false'),
         DeclareLaunchArgument('gui', default_value='true'),
-        DeclareLaunchArgument('gazebo_world', default_value=os.path.join(interbotix_gazebo_dir, 'worlds/xslocobot_gazebo.world')),
+        DeclareLaunchArgument('world_name', default_value=''),
         DeclareLaunchArgument('debug', default_value='false'),
         DeclareLaunchArgument('paused', default_value='true'),
         DeclareLaunchArgument('recording', default_value='false'),
@@ -47,83 +171,23 @@ def generate_launch_description():
         DeclareLaunchArgument('use_position_controllers', default_value='false'),
         DeclareLaunchArgument('use_trajectory_controllers', default_value='true'),
         DeclareLaunchArgument('dof', default_value='5'),
+        DeclareLaunchArgument('robot_controller_filename', default_value=''),
+        DeclareLaunchArgument('controllers_file', default_value=''),
+        DeclareLaunchArgument('hardware_type', default_value='gz_ignition'),
+        DeclareLaunchArgument('action_cycle_rate', default_value='25'),
+        DeclareLaunchArgument('server_port', default_value='50051'),
+        DeclareLaunchArgument('x', default_value='0.0'),
+        DeclareLaunchArgument('y', default_value='0.0'),
+        DeclareLaunchArgument('z', default_value='0.0'),
+        DeclareLaunchArgument('yaw', default_value='0.0'),
+        DeclareLaunchArgument('camera_gazebo', default_value='false'),
+        DeclareLaunchArgument('camera_link_x', default_value='0.0'),
+        DeclareLaunchArgument('camera_link_y', default_value='0.0'),
+        DeclareLaunchArgument('camera_link_z', default_value='0.0'),
+        DeclareLaunchArgument('camera_link_roll', default_value='0.0'),
+        DeclareLaunchArgument('camera_link_pitch', default_value='0.0'),
+        DeclareLaunchArgument('camera_link_yaw', default_value='0.0'),
+        DeclareLaunchArgument('base_model', default_value='create3'),
+    ]
 
-        SetEnvironmentVariable('GAZEBO_RESOURCE_PATH', interbotix_gazebo_dir),
-
-        # Load controllers config
-        Node(
-            package='ros2param',
-            executable='ros2param',
-            name='load_gazebo_controllers',
-            arguments=['load_from_yaml', robot_name, os.path.join(interbotix_gazebo_dir, 'config', 'locobot_gazebo_controllers.yaml')],
-            output='screen'
-        ),
-
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')),
-            launch_arguments={
-                'world': gazebo_world,
-                'gui': gui,
-                'debug': debug,
-                'paused': paused,
-                'use_sim_time': use_sim_time
-            }.items(),
-        ),
-
-        # Controller spawning logic
-        GroupAction([
-            GroupAction([
-                Node(
-                    package='ros2param',
-                    executable='ros2param',
-                    name='load_arm_trajectory_controllers',
-                    arguments=['load_from_yaml', robot_name, os.path.join(interbotix_gazebo_dir, 'config/trajectory_controllers', f'{LaunchConfiguration("arm_model")}_trajectory_controllers.yaml')],
-                    output='screen'
-                ),
-                Node(
-                    package='controller_manager',
-                    executable='spawner.py',
-                    arguments=['arm_controller', 'gripper_controller', 'pan_controller', 'tilt_controller', 'joint_state_controller'],
-                    namespace=robot_name,
-                    output='screen'
-                )
-            ], condition=IfCondition(use_trajectory_controllers)),
-
-            GroupAction([
-                Node(
-                    package='ros2param',
-                    executable='ros2param',
-                    name='load_arm_position_controllers',
-                    arguments=['load_from_yaml', robot_name, os.path.join(interbotix_gazebo_dir, 'config/position_controllers', f'{LaunchConfiguration("arm_model")}_position_controllers.yaml')],
-                    output='screen'
-                ),
-                Node(
-                    package='controller_manager',
-                    executable='spawner.py',
-                    arguments=[
-                        'joint_state_controller',
-                        'waist_controller',
-                        'shoulder_controller',
-                        'elbow_controller',
-                        'wrist_angle_controller',
-                        'wrist_rotate_controller',
-                        'left_finger_controller',
-                        'right_finger_controller',
-                        'pan_controller',
-                        'tilt_controller'
-                    ],
-                    namespace=robot_name,
-                    output='screen'
-                )
-            ], condition=IfCondition(use_position_controllers))
-        ], condition=IfCondition("robot_model != 'locobot_base'")),
-
-        Node(
-            package='controller_manager',
-            executable='spawner.py',
-            arguments=['pan_controller', 'tilt_controller', 'joint_state_controller'],
-            namespace=robot_name,
-            output='screen',
-            condition=UnlessCondition("robot_model != 'locobot_base'")
-        )
-    ])
+    return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])

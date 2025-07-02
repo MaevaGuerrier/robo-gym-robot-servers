@@ -2,7 +2,6 @@
 import rclpy
 from std_msgs.msg import Bool
 from geometry_msgs.msg import TransformStamped
-from gazebo_msgs.msg import ModelState
 from scipy import signal, interpolate
 import numpy as np
 import copy
@@ -281,8 +280,6 @@ class ObjectsController(Node):
                     hold_a,
                     hold_b,
                     hold_c,
-                    n_points,
-                    n_sampling_points,
                     n_sampling_points_ab,
                     n_sampling_points_bc,
                 ) = (
@@ -292,13 +289,14 @@ class ObjectsController(Node):
                     response.values[3].double_value,
                     response.values[4].double_value,
                     response.values[5].double_value,
-                    response.values[6].bool_value,
-                    response.values[7].bool_value,
-                    response.values[8].bool_value,
-                    response.values[9].integer_value,
-                    response.values[10].integer_value,
-                    response.values[11].integer_value,
-                    response.values[12].integer_value)
+                    response.values[6].double_value,
+                    response.values[7].double_value,
+                    response.values[8].double_value,
+                    response.values[9].bool_value,
+                    response.values[10].bool_value,
+                    response.values[11].bool_value,
+                    response.values[12].integer_value,
+                    response.values[13].integer_value)
                 x_trajectory, y_trajectory, z_trajectory = self.get_interpolated_a_b_c(
                     x_a,
                     y_a,

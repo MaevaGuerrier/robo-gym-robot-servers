@@ -366,7 +366,9 @@ class InterbotixArmRosBridge:
             dur.append(max(abs(cmd-pos)/max_vel, self.min_traj_duration))
         msg.points[0].time_from_start = Duration(seconds=max(dur)).to_msg()
         self.arm_cmd_pub.publish(msg)
+
         time.sleep(1/self.rate)
+
         return position_cmd
 
     def publish_env_arm_delta_cmd(self, delta_cmd):
@@ -389,7 +391,9 @@ class InterbotixArmRosBridge:
         msg.points[0].positions = position_cmd
         msg.points[0].time_from_start = Duration.from_sec(max(dur)).to_msg()
         self.arm_cmd_pub.publish(msg)
+
         time.sleep(1/self.rate)
+
         return position_cmd
 
     def _on_joint_states(self, msg):

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import rospy
 from geometry_msgs.msg import Twist, Pose
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 from nav_msgs.msg import Odometry
@@ -10,21 +9,27 @@ import copy
 from threading import Event
 from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_pb2
 import numpy as np
+import time
+import rclpy
+from rclpy.duration import Duration
 
 
 class InterbotixRoverRosBridge:
 
-    def __init__(self, real_robot=False, robot_model='locobot_wx250s'):
-
-        # Event is clear while initialization or set_state is going on
+    def __init__(self, node):
+        self.node = node
+        self.node.get_logger().info('Initializing InterbotixRoverRosBridge...')
         self.reset = Event()
         self.reset.clear()
         self.get_state_event = Event()
         self.get_state_event.set()
 
-        self.real_robot = real_robot
-        self.robot_model = robot_model
-        self.robot_name, arm_model = robot_model.split('_')
+        self.node.declare_parameter('action_cycle_rate', 125.0)
+
+        self.real_robot = self.node.get_parameter('real_robot').value
+        self.robot_model = self.node.get_parameter('robot_model').value
+
+        self.robot_name, arm_model = self.robot_model.split('_')
         
         if arm_model == 'wx250s':
             self.dof = 6
@@ -33,13 +38,12 @@ class InterbotixRoverRosBridge:
         else:
             self.dof = 5
         
-        self.base_cmd_pub = rospy.Publisher(self.robot_name + '/cmd_vel', Twist, queue_size=1)
-        self.arm_cmd_pub = rospy.Publisher('/env_arm_command', JointTrajectory, queue_size=1)
+        self.base_cmd_pub = self.node.create_publisher(Twist, self.robot_name + '/cmd_vel', 1)
+        self.arm_cmd_pub = self.node.create_publisher(JointTrajectory, self.robot_name + '/env_arm_command', 1)
 
-        control_rate_float = rospy.get_param("~action_cycle_rate", 125.0)
-        self.control_rate = rospy.Rate(control_rate_float)
+        self.rate = self.node.get_parameter('action_cycle_rate').value
+        self.control_rate = self.node.create_timer(1.0 / self.rate, lambda: None)
 
-        # Joint States
         if self.dof == 4:
             self.joint_names = ['waist', 'shoulder', 'elbow', 'wrist_angle']
             self.joint_goal_names = ['base_joint_position', 'shoulder_joint_position', 'elbow_joint_position',
@@ -61,10 +65,10 @@ class InterbotixRoverRosBridge:
         
         self.base_pose = Pose()
         
-        rospy.Subscriber(self.robot_name + "/joint_states", JointState, self._on_joint_states)       
-        rospy.Subscriber(self.robot_name + "/odom", Odometry, self._on_odom)
+        self.node.create_subscription(JointState,  "/joint_states", self._on_joint_states, 10)
+        self.node.create_subscription(Odometry, self.robot_name + "/odom", self._on_odom, 10)
         
-        self.min_traj_duration = 0.5 # minimum trajectory duration (s)
+        self.min_traj_duration = 0.5
         self.joint_velocity_limits = self._get_joint_velocity_limits()
         
     def get_state(self):
@@ -87,21 +91,18 @@ class InterbotixRoverRosBridge:
         state_dict.update(self._get_joint_states_dict(joint_position, joint_velocity, base_pose))
 
         self.get_state_event.set()
-        # Create and fill State message
+
         msg = robot_server_pb2.State(state=state, state_dict=state_dict, success=True)
         return msg
         
     def set_state(self, state_msg):
-        # Set the initial state of the robot
         if all(j in state_msg.state_dict for j in self.joint_goal_names):
             state_dict = True
         else:
             state_dict = False 
-        
-        # Clear reset Event
+
         self.reset.clear()
-        
-        # Interbotix Joints Positions
+
         if state_dict:
             goal_joint_states = [state_msg.state_dict[joint] for joint in self.joint_goal_names]
 
@@ -112,11 +113,12 @@ class InterbotixRoverRosBridge:
         self.reset.set()
 
         for _ in range(20):
-            self.control_rate.sleep()
+            time.sleep(1/self.rate)
 
         return 1
     
     def send_action(self, action):
+        # split base command from arm command
         executed_action = self.publish_env_arm_cmd(action[:-2])
         
         executed_action_base = self.publish_env_base_cmd(action[-2:])
@@ -155,10 +157,10 @@ class InterbotixRoverRosBridge:
             cmd = position_cmd[idx]
             max_vel = self.joint_velocity_limits[name]
             dur.append(max(abs(cmd-pos)/max_vel, self.min_traj_duration))
-        msg.points[0].time_from_start = rospy.Duration.from_sec(max(dur))
+        msg.points[0].time_from_start = Duration(seconds=max(dur)).to_msg()
         self.arm_cmd_pub.publish(msg)
 
-        self.control_rate.sleep()
+        time.sleep(1/self.rate)
         
         return position_cmd
     
@@ -168,7 +170,7 @@ class InterbotixRoverRosBridge:
         msg.angular.z = goal[1]
         self.base_cmd_pub.publish(msg)
         
-        self.control_rate.sleep()
+        time.sleep(1/self.rate)
         
         return goal
     
