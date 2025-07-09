@@ -5,6 +5,7 @@ from rclpy.node import Node
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from interbotix_xs_msgs.msg import JointGroupCommand
 from queue import Queue
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 
 class JointTrajectoryCH(Node):
@@ -24,7 +25,7 @@ class JointTrajectoryCH(Node):
             topic = f'{self.robot_name}/commands/joint_group'
             self.jt_pub = self.create_publisher(JointGroupCommand, topic, 10)
         else:
-            topic = f'{self.robot_name}/arm_controller/joint_trajectory'
+            topic = '/arm_controller/joint_trajectory'
             self.jt_pub = self.create_publisher(JointTrajectory, topic, 10)
 
         self.create_subscription(JointTrajectory, self.robot_name  + '/env_arm_command', self.callback_env_joint_trajectory, 10)
@@ -33,7 +34,7 @@ class JointTrajectoryCH(Node):
         self.stop_flag = False
         self.joints = []
 
-        self.timer = self.create_timer(1.0 / ac_rate, self.joint_trajectory_publisher)
+        self.timer = self.create_timer(1.0 / ac_rate, self.joint_trajectory_publisher, callback_group=ReentrantCallbackGroup())
 
     def callback_env_joint_trajectory(self, msg):
         try:

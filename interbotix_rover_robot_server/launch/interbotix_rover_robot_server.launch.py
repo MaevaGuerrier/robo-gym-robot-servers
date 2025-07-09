@@ -25,7 +25,6 @@ def launch_setup(context, *args, **kwargs):
     show_lidar = LaunchConfiguration('show_lidar')
     show_gripper_bar = LaunchConfiguration('show_gripper_bar')
     show_gripper_fingers = LaunchConfiguration('show_gripper_fingers')
-    world_name = LaunchConfiguration("world_name")
     x = LaunchConfiguration("x")
     y = LaunchConfiguration("y")
     z = LaunchConfiguration("z")

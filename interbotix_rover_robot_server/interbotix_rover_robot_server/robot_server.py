@@ -15,6 +15,7 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
 
     def GetState(self, request, context):
         try:
+            self.node.get_logger().debug('Getting state...')
             return self.rosbridge.get_state()
         except Exception as e:
             self.node.get_logger().error(f'Failed to get state: {e}')
@@ -22,6 +23,7 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
 
     def SetState(self, request, context):
         try:
+            self.node.get_logger().debug('Setting state...')
             self.rosbridge.set_state(state_msg=request)
             return robot_server_pb2.Success(success=1)
         except Exception as e:
@@ -30,6 +32,7 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
 
     def SendAction(self, request, context):
         try:
+            self.node.get_logger().debug('Sending action...')
             self.rosbridge.send_action(request.action)
             return robot_server_pb2.Success(success=1)
         except Exception as e:
@@ -38,6 +41,7 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
 
     def SendActionGetState(self, request, context):
         try:
+            self.node.get_logger().debug('Sending action and getting state...')
             self.rosbridge.send_action(request.action)
             return self.rosbridge.get_state()
         except Exception as e:

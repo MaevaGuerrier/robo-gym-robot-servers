@@ -134,6 +134,8 @@ def launch_setup(context, *args, **kwargs):
         arguments=[
             "/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock",
             f"/world/{world_name_split.perform(context)}/set_pose@ros_gz_interfaces/srv/SetEntityPose",
+            f"/world/{world_name_split.perform(context)}/model/interbotix_rover/link/camera_locobot_link/sensor/camera_frame_sensor/image" + '@sensor_msgs/msg/Image' + '[ignition.msgs.Image',
+            '/world/empty/model/interbotix_rover/link/camera_locobot_link/sensor/camera_frame_sensor/depth_image/points' + '@sensor_msgs/msg/PointCloud2' + '[ignition.msgs.PointCloudPacked'
         ],
         output="screen",
     )
