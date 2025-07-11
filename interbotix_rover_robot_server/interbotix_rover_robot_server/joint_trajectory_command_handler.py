@@ -56,14 +56,7 @@ class JointTrajectoryCH(Node):
             self.stop_flag = False
             self.joints = list(traj_msg.joint_names)
         else:
-            if not self.stop_flag:
-                if self.real_robot:
-                    self.jt_pub.publish(JointGroupCommand())
-                else:
-                    cmd = JointTrajectory()
-                    cmd.joint_names = self.joints
-                    self.jt_pub.publish(cmd)
-                self.stop_flag = True
+            self.stop_flag = True
 
 
 def main(args=None):

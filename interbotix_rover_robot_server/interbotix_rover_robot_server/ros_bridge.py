@@ -11,6 +11,7 @@ from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_p
 import numpy as np
 import time
 import rclpy
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 from rclpy.duration import Duration
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
@@ -97,10 +98,15 @@ class InterbotixRoverRosBridge:
 
         self.base_pose = Pose()
 
+        odom_qos = rclpy.qos.QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT)
+
         self.node.create_subscription(JointState,  "/joint_states", self._on_joint_states, 10)
-        self.node.create_subscription(Odometry, self.robot_name + "/odom", self._on_odom, 10)
+        self.node.create_subscription(Odometry, self.robot_name + "/mobile_base/odom", self._on_odom, odom_qos)
         if self.camera:
-            self.node.create_subscription(Image, "/world/empty/model/interbotix_rover/link/camera_locobot_link/sensor/camera_frame_sensor/image", self._on_image, 10)
+            if self.real_robot:
+                self.node.create_subscription(Image, "/usb_cam/image_raw", self._on_image, 10)
+            else:
+                self.node.create_subscription(Image, "/world/empty/model/interbotix_rover/link/camera_locobot_link/sensor/camera_frame_sensor/image", self._on_image, 10)
 
         self.image = None
         self.bridge = CvBridge()
@@ -247,7 +253,7 @@ class InterbotixRoverRosBridge:
 
         start_time = time.time()
         while not send_goal_future.done():
-            if time.time() - start_time > 1.0:  # 1 second timeout for goal acceptance
+            if time.time() - start_time > 1.0:
                 self.node.get_logger().error('Timeout waiting for goal acceptance')
                 return False
             rclpy.spin_once(self.node, timeout_sec=0.01)

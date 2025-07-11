@@ -137,8 +137,9 @@ def launch_setup(context, *args, **kwargs):
             }],
             output='screen',
             remappings=[
-                ('/locobot/odom', '/mobile_base/odom'),
-                ('/locobot/cmd_vel', '/mobile_base/cmd_vel')
+                ('/locobot/odom', '/locobot/mobile_base/odom'),
+                ('/locobot/cmd_vel', '/locobot/mobile_base/cmd_vel'),
+                ('/joint_states', '/locobot/joint_states')
             ]
         ),
         Node(
