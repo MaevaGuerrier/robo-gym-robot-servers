@@ -45,6 +45,7 @@ def launch_setup(context, *args, **kwargs):
     object_1_frame = LaunchConfiguration("object_1_frame")
     objects_controller = LaunchConfiguration("objects_controller")
     controllers_file = LaunchConfiguration("controllers_file")
+    context_size = LaunchConfiguration("context_size")
 
     rviz_config = PathJoinSubstitution([
         LaunchConfiguration('rviz_config_path'),
@@ -134,6 +135,7 @@ def launch_setup(context, *args, **kwargs):
                 'robot_model': robot_model,
                 'action_cycle_rate': action_cycle_rate,
                 'reference_frame': reference_frame,
+                'context_size': context_size,
             }],
             output='screen',
             remappings=[
@@ -221,6 +223,7 @@ def generate_launch_description():
         DeclareLaunchArgument('camera_link_roll', default_value='0.0'),
         DeclareLaunchArgument('camera_link_pitch', default_value='0.0'),
         DeclareLaunchArgument('camera_link_yaw', default_value='0.0'),
+        DeclareLaunchArgument('context_size', default_value='1.0'),
         DeclareLaunchArgument('robot_description_file', default_value=robot_description_file),
         DeclareLaunchArgument('robot_description_filename', default_value=robot_description_filename),
         DeclareLaunchArgument('controllers_file', default_value=PathJoinSubstitution([

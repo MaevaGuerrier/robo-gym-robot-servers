@@ -35,7 +35,7 @@ class InterbotixRoverRosBridge:
         self.node.declare_parameter('image_width', 160)
         self.node.declare_parameter('image_height', 120)
         self.node.declare_parameter('resize_image', False)
-        self.node.declare_parameter('context_size', 3)
+        self.node.declare_parameter('context_size', 1)
 
         self.real_robot = self.node.get_parameter('real_robot').value
         self.robot_model = self.node.get_parameter('robot_model').value
