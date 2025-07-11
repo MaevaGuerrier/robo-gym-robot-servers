@@ -112,6 +112,7 @@ class InterbotixRoverRosBridge:
         self.bridge = CvBridge()
         self.min_traj_duration = 0.5
         self.joint_velocity_limits = self._get_joint_velocity_limits()
+        self.image_encoding = 'rgb8'
 
         self.arm_goal_completed = Event()
         self.arm_goal_success = False
@@ -139,6 +140,7 @@ class InterbotixRoverRosBridge:
 
         string_params["image_count"] = str(len(self.context_queue))
         string_params["context_size"] = str(self.context_size)
+        string_params["image_encoding"] = self.image_encoding
 
         self.get_state_event.set()
         msg = robot_server_pb2.State(
@@ -308,6 +310,7 @@ class InterbotixRoverRosBridge:
             self.base_pose = msg.pose.pose
 
     def _on_image(self, msg):
+        self.image_encoding = msg.encoding
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         if self.resize_image:
             image_array = cv2.resize(cv_image, (self.image_width, self.image_height), interpolation=cv2.INTER_LINEAR)
