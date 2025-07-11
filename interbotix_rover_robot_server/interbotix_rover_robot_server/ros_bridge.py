@@ -303,7 +303,10 @@ class InterbotixRoverRosBridge:
             for idx, name in enumerate(msg.name):
                 if name in self.joint_names:
                     self.joint_position[name] = msg.position[idx]
-                    self.joint_velocity[name] = msg.velocity[idx]
+                    if idx < len(msg.velocity):
+                        self.joint_velocity[name] = msg.velocity[idx]
+                    else:
+                        self.joint_velocity[name] = 0
 
     def _on_odom(self, msg):
         if self.get_state_event.is_set():
