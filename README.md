@@ -58,9 +58,9 @@ For the locobot workspace:
 
 ```sh
 sudo apt install curl
-curl 'https://raw.githubusercontent.com/Interbotix/interbotix_ros_rovers/main/interbotix_ros_xslocobots/install/xslocobot_remote_install.sh' > xslocobot_remote_install.sh
-chmod +x xslocobot_remote_install.sh
-./xslocobot_remote_install.sh -d noetic -b create3 -p /home/user/interbotix_rover_ws
+curl 'https://raw.githubusercontent.com/Interbotix/interbotix_ros_rovers/main/interbotix_ros_xslocobots/install/amd64/xslocobot_amd64_install.sh' > xslocobot_amd64_install.sh
+chmod +x xslocobot_amd64_install.sh
+./xslocobot_amd64_install.sh -d humble -b create3 -p /home/user/interbotix_rover_ws
 
 ```
 Once the workspace has build, source the devel/setup.bash before building your robogym workspace to create an overlay.
