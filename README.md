@@ -12,9 +12,9 @@ The `robo-gym-robot-servers` provide an interface to the Gazebo simulations and 
 
 # Supported Systems 
 
-Recommended System Setup: Ubuntu 20.04 - ROS Noetic - Python [>3.7]
+Recommended System Setup: Ubuntu 22.04 - ROS Humble - Python [3.10]
 
-The packages are being developed for ROS Noetic.
+The packages are being developed for ROS Humble.
 
 ## Robots currently implemented
 - MiR100
@@ -26,7 +26,7 @@ The packages are being developed for ROS Noetic.
 
 # Installation
 
-## Ubuntu 20.04 - ROS Noetic - Python [>3.7]
+## Ubuntu 22.04 - ROS Humble - Python [3.10]
 
 1.  Setup your computer to accept software from packages.ros.org
 ```sh
@@ -43,12 +43,12 @@ sudo apt-get update && sudo apt-get install apt-utils build-essential psmisc vim
 # Set robo-gym ROS workspace folder
 export ROBOGYM_WS=~/robogym_ws 
 # Set ROS distribution
-export ROS_DISTRO=noetic
+export ROS_DISTRO=humble
 ```
 
 4. Create a workspace folder in the home folder of your PC and clone this repository
 ```sh
-mkdir -p $ROBOGYM_WS/src && cd $ROBOGYM_WS/src && git clone https://github.com/montrealrobotics/robo-gym-robot-servers.git
+mkdir -p $ROBOGYM_WS/src && cd $ROBOGYM_WS/src && git clone -b ros2 https://github.com/montrealrobotics/robo-gym-robot-servers.git
 ```
 
 5. Clone required packages, build the workspace and install required python modules
@@ -66,9 +66,9 @@ chmod +x xslocobot_remote_install.sh
 Once the workspace has build, source the devel/setup.bash before building your robogym workspace to create an overlay.
 
 If you want to use both the interbotix arms and rovers (locobots) you can also run the install script for the Interbotix arms. You can then overlay, interbotix_ws > interbotix_rover_ws > robogym_ws.
-By default all robot servers are not built, to build a server, remove the CATKIN_IGNORE file in the root directory of the robot server, i.e.
+By default all robot servers are not built, to build a server, remove the COLCON_IGNORE file in the root directory of the robot server, i.e.
 ```
-rm ~/robo-gym-robot-servers/interbotix_rover_robot_server/CATKIN_IGNORE
+rm ~/robo-gym-robot-servers/interbotix_rover_robot_server/COLCON_IGNORE
 ```
 
 
@@ -85,10 +85,10 @@ cd $ROBOGYM_WS
 sudo apt-get update
 sudo rosdep init
 rosdep update
-rosdep install --from-paths src -i -y --rosdistro $ROS_DISTRO
-catkin init
+rosdep install --from-paths src -r -y --rosdistro $ROS_DISTRO
+colcon init
 source /opt/ros/$ROS_DISTRO/setup.bash
-catkin build
+colcon build --symlink-install
 pip3 install robo-gym-server-modules scipy numpy
 pip3 install protobuf==3.20
 ```
@@ -199,7 +199,7 @@ roslaunch ur_robot_server ur_robot_server.launch ur_model:=ur10  gui:=true
 ```
 
 ### Real Robot Server
-#### Install UR ROS Driver
+#### Install UR ROS Driver - not yet tested with ROS2
 
 To control the UR Robots we use the new [UR ROS Driver](https://github.com/jr-robotics/Universal_Robots_ROS_Driver).
 At the current status the [UR ROS Driver](https://github.com/jr-robotics/Universal_Robots_ROS_Driver) and the [Universal_robot](https://github.com/jr-robotics/universal_robot) package use two different robot descriptions, for this reason it is needed to setup the UR ROS Driver in a separate workspace to avoid conflicts between the two packages.
