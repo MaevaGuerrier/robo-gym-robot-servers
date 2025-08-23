@@ -4,10 +4,12 @@ import rospy
 from concurrent import futures
 from bunker_robot_server.ros_bridge import BunkerRosBridge
 from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_pb2, robot_server_pb2_grpc
+import time
 
 class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
     def __init__(self,real_robot,robot_model):
         self.rosbridge = BunkerRosBridge(real_robot=real_robot,robot_model=robot_model)
+        self.prev_action = None
 
     def GetState(self, request, context):
         try:
@@ -26,7 +28,23 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
 
     def SendAction(self, request, context):
         try:
-            executed_action = self.rosbridge.send_action(request.action)
+            
+            if self.prev_action is None:
+                self.prev_action = request.action
+            elif request.action != [0.0, 0.0]:
+                self.prev_action = request.action
+                # TODO 
+            #     self.time = time.time() 
+            # else:
+            #     elapsed_time = time.time() - self.time
+            #     if elapsed_time > 1.0:  # If more than 1 second has passed
+            #         self.prev_action = [0.0, 0.0]
+            #         print("NOT RECEIVING ACTION OTHER THAN 0, exiting")
+            #         exit()
+
+            print(f"PREV ACTION: {self.prev_action}")
+
+            executed_action = self.rosbridge.send_action(self.prev_action )
             return robot_server_pb2.Success(success=1)
         except:
             rospy.logerr('Failed to send action', exc_info=True)
@@ -34,7 +52,20 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
 
     def SendActionGetState(self, request, context):
         try:
-            executed_action = self.rosbridge.send_action(request.action)
+            if self.prev_action is None:
+                self.prev_action = request.action
+            elif request.action != [0.0, 0.0]:
+                self.prev_action = request.action
+                # self.time = time.time() 
+            # else:
+            #     elapsed_time = time.time() - self.time
+            #     if elapsed_time > 1.0:  # If more than 1 second has passed
+            #         self.prev_action = [0.0, 0.0]
+            #         print("NOT RECEIVING ACTION OTHER THAN 0, exiting")
+            #         exit()
+
+            print(f"PREV ACTION: {self.prev_action}")
+            executed_action = self.rosbridge.send_action(self.prev_action)
             return self.rosbridge.get_state()
         except:
             rospy.logerr('Failed to send action and get state', exc_info=True)

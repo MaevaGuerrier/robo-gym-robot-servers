@@ -3,7 +3,7 @@
   <arg name="rviz_gui" default="false"/>
   <arg name="server_port" default="50051"/>
   <arg name="real_robot" default="true" doc="true: Real Robot, false: Simulated Robot"/>
-  <arg name="action_cycle_rate" default="25" doc="Rate at which new commands are published to the robot controller"/>
+  <arg name="action_cycle_rate" default="10" doc="Rate at which new commands are published to the robot controller"/>
 
   <!-- Rviz -->
   <!-- <arg name="rviz_frame"                        default="$(arg robot_name)/base_footprint"/>

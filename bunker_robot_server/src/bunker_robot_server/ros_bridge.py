@@ -13,7 +13,6 @@ from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_p
 import numpy as np
 import base64
 
-
 class BunkerRosBridge:
 
     def __init__(self, real_robot=False, robot_model='bunker'):
@@ -38,6 +37,11 @@ class BunkerRosBridge:
         self.context_queue = [] 
 
         self.control_rate = rospy.Rate(control_rate_float)
+
+        # Subscriber to Velocity Command coming from Environment
+        # rospy.Subscriber('env_cmd_vel', Twist, self.callback_env_cmd_vel, queue_size=1)
+        # self.queue = Queue(maxsize=1)
+
         self.image = None
         self.bridge = CvBridge()
         self.image_encoding = 'rgb8'
@@ -47,7 +51,25 @@ class BunkerRosBridge:
         rospy.Subscriber("/lvi_sam/lidar/mapping/odometry", Odometry, self._on_odom)
         rospy.Subscriber("/oak/rgb/image_raw", Image, self._on_image)
         
-        
+
+    # def callback_env_cmd_vel(self, data):
+    #     try:
+    #         # Add to the Queue the next command to execute
+    #         self.queue.put(data)
+    #     except:
+    #         pass
+
+    # def cmd_vel_publisher(self):
+    #         while not rospy.is_shutdown():
+    #             # If a command from the environment is waiting to be executed,
+    #             # publish the command, otherwise publish zero velocity message
+    #             if self.queue.full():
+    #                 self.cmd_vel_pub.publish(self.queue.get())
+    #             else:
+    #                 self.cmd_vel_pub.publish(Twist())
+    #             self.rate.sleep()
+
+
     def get_state(self):
         self.get_state_event.clear()
         # Get environment state
@@ -89,8 +111,8 @@ class BunkerRosBridge:
 
         self.reset.set()
 
-        for _ in range(20):
-            self.control_rate.sleep()
+        # for _ in range(20):
+        self.control_rate.sleep()
 
         return 1
     
