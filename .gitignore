@@ -10,3 +10,11 @@
 /*.egg-info
 .vscode/
 .idea/
+
+*.xml
+*.rviz
+*.xacro
+
+CATKIN_IGNORE
+
+CMakeLists.txt
