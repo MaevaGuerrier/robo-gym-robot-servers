@@ -8,6 +8,7 @@ def launch_setup(context, *args, **kwargs):
     server_port = LaunchConfiguration('server_port')
     real_robot = LaunchConfiguration('real_robot')
     action_cycle_rate = LaunchConfiguration('action_cycle_rate')
+    robot_model = LaunchConfiguration('robot_model')
 
     nodes = [
         Node(
@@ -17,12 +18,12 @@ def launch_setup(context, *args, **kwargs):
             parameters=[{
                 'server_port': server_port,
                 'action_cycle_rate': action_cycle_rate,
-                'robot_model': robot_model
+                'robot_model': robot_model,
                 'real_robot': real_robot,
             }],
             respawn=False,
             output='screen'
-        ),   
+        ),
     ]
 
     return nodes
@@ -34,7 +35,8 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz_gui', default_value='false'),
         DeclareLaunchArgument('server_port', default_value='50051'),
         DeclareLaunchArgument('real_robot', default_value='true'),
-        DeclareLaunchArgument('action_cycle_rate', default_value='10'),
+        DeclareLaunchArgument('action_cycle_rate', default_value='10.0'),
+        DeclareLaunchArgument('robot_model', default_value='bunker'),
     ]
 
     return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])
