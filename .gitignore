@@ -11,10 +11,13 @@
 .vscode/
 .idea/
 
-*.xml
-*.rviz
-*.xacro
+
+example_robot_server/
+interbotix_arm_robot_server/
+interbotix_rover_robot_server/
+mir100_robot_server/
+panda_robot_server/
+simulation_objects/
+ur_robot_server/.*
 
 CATKIN_IGNORE
-
-CMakeLists.txt
