@@ -49,7 +49,8 @@ class BunkerRosBridge:
         self.base_pose = Pose()
              
         rospy.Subscriber("/lvi_sam/lidar/mapping/odometry", Odometry, self._on_odom)
-        rospy.Subscriber("/oak/rgb/image_raw", Image, self._on_image)
+        # TODO specify your camera topic
+        rospy.Subscriber("/usb_cam/image_raw", Image, self._on_image) # "/oak/rgb/image_raw"
         
 
     # def callback_env_cmd_vel(self, data):
