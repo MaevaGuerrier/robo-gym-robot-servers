@@ -60,7 +60,7 @@ class BunkerRosBridge:
         # TODO specify your camera topic
         odom_qos = rclpy.qos.QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT)
         self.node.create_subscription(Odometry, "/odom", self._on_odom, odom_qos)
-        self.node.create_subscription(Image, "/camera1/image_raw", self._on_image, 10) # TODO what is this 10
+        self.node.create_subscription(Image, "/oak/rgb/image_raw", self._on_image, 10) # TODO what is this 10
 
 
     # def callback_env_cmd_vel(self, data):
