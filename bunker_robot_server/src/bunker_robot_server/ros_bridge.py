@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
-import rclpy
+import rospy
 from geometry_msgs.msg import Twist, Pose
 from sensor_msgs.msg import Image  
 from nav_msgs.msg import Odometry
@@ -12,14 +12,11 @@ from cv_bridge import CvBridge
 from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_pb2
 import numpy as np
 import base64
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy
-import time
 
 class BunkerRosBridge:
 
-    def __init__(self, node, real_robot=False, robot_model='bunker'):
+    def __init__(self, real_robot=False, robot_model='bunker'):
 
-        self.node = node
         # Event is clear while initialization or set_state is going on
         self.reset = Event()
         self.reset.clear()
@@ -28,28 +25,22 @@ class BunkerRosBridge:
 
         self.real_robot = real_robot
         self.robot_model = robot_model
-
-        self.base_cmd_pub = self.node.create_publisher(Twist, '/cmd_vel', 1)
-
-        self.node.declare_parameter('action_cycle_rate', 20.0)
-        self.node.declare_parameter('camera', True)
-        self.node.declare_parameter('image_width', 160)
-        self.node.declare_parameter('image_height', 120)
-        self.node.declare_parameter('resize_image', False)
-        self.node.declare_parameter('context_size', 1)
         
-        self.real_robot = self.node.get_parameter('real_robot').value
-        self.robot_model = self.node.get_parameter('robot_model').value
-        self.camera = self.node.get_parameter('camera').value
-        self.image_width = self.node.get_parameter('image_width').value
-        self.image_height = self.node.get_parameter('image_height').value
-        self.resize_image = self.node.get_parameter('resize_image').value
-        self.context_size = self.node.get_parameter('context_size').value
+        self.base_cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
 
+        control_rate_float = rospy.get_param("~action_cycle_rate", 20.0)
+        self.image_height = rospy.get_param("~image_height", 120.0)
+        self.image_width = rospy.get_param("~image_width", 160.0)
+        self.camera = rospy.get_param("~camera", True) 
+        self.resize_image = rospy.get_param("~resize_image", True) 
+        self.context_size = rospy.get_param("~context_size", 1)
         self.context_queue = [] 
 
-        self.rate = self.node.get_parameter('action_cycle_rate').value
-        self.control_rate = self.node.create_timer(1.0 / self.rate, lambda: None)
+        self.control_rate = rospy.Rate(control_rate_float)
+
+        # Subscriber to Velocity Command coming from Environment
+        # rospy.Subscriber('env_cmd_vel', Twist, self.callback_env_cmd_vel, queue_size=1)
+        # self.queue = Queue(maxsize=1)
 
         self.image = None
         self.bridge = CvBridge()
@@ -57,11 +48,10 @@ class BunkerRosBridge:
         
         self.base_pose = Pose()
              
+        rospy.Subscriber("/lvi_sam/lidar/mapping/odometry", Odometry, self._on_odom)
         # TODO specify your camera topic
-        odom_qos = rclpy.qos.QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT)
-        self.node.create_subscription(Odometry, "/odom", self._on_odom, odom_qos)
-        self.node.create_subscription(Image, "/camera1/image_raw", self._on_image, 10) # TODO what is this 10
-
+        rospy.Subscriber("/usb_cam/image_raw", Image, self._on_image) # "/oak/rgb/image_raw"
+        
 
     # def callback_env_cmd_vel(self, data):
     #     try:
@@ -122,8 +112,8 @@ class BunkerRosBridge:
 
         self.reset.set()
 
-        for _ in range(20):
-            time.sleep(1/self.rate)
+        # for _ in range(20):
+        self.control_rate.sleep()
 
         return 1
     
@@ -158,7 +148,7 @@ class BunkerRosBridge:
         msg.angular.z = goal[1]
         self.base_cmd_pub.publish(msg)
         
-        time.sleep(1/self.rate)
+        self.control_rate.sleep()
         
         return goal
     
