@@ -60,7 +60,7 @@ class BunkerRosBridge:
         # TODO specify your camera topic
         odom_qos = rclpy.qos.QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT)
         self.node.create_subscription(Odometry, "/odom", self._on_odom, odom_qos)
-        self.node.create_subscription(Image, "/oak/rgb/image_raw", self._on_image, 10) # TODO what is this 10
+        self.node.create_subscription(Image, "/camera1/image_raw", self._on_image, 10) # TODO what is this 10
 
 
     # def callback_env_cmd_vel(self, data):
@@ -99,7 +99,6 @@ class BunkerRosBridge:
         string_params["image_count"] = str(len(self.context_queue))
         string_params["context_size"] = str(self.context_size)
         string_params["image_encoding"] = self.image_encoding
-
         self.get_state_event.set()
         # Create and fill State message
         msg = robot_server_pb2.State(state=state, state_dict=state_dict, string_params=string_params, success=True)
@@ -142,7 +141,7 @@ class BunkerRosBridge:
             image_array = cv_image
         _, buffer = cv2.imencode('.png', image_array)
         image_bytes = buffer.tobytes()
-
+        # print("getting images")
         image_string = base64.b64encode(image_bytes).decode('utf-8')
         if len(self.context_queue) < self.context_size + 1:
             self.context_queue.append(image_string)

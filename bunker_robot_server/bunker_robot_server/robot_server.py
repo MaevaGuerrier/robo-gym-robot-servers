@@ -46,9 +46,9 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
             #         self.prev_action = [0.0, 0.0]
             #         print("NOT RECEIVING ACTION OTHER THAN 0, exiting")
             #         exit()
-            print(f"PREV ACTION: {self.prev_action}")
-            self.node.get_logger().debug(f"PREV ACTION: {self.prev_action}")
-            self.node.get_logger().debug('Sending action...')
+            # print(f"PREV ACTION: {self.prev_action}")
+            self.node.get_logger().info(f"PREV ACTION: {self.prev_action}")
+            self.node.get_logger().info('Sending action...')
             executed_action = self.rosbridge.send_action(self.prev_action)
             return robot_server_pb2.Success(success=1)
         except:
@@ -68,9 +68,9 @@ class RobotServerServicer(robot_server_pb2_grpc.RobotServerServicer):
             #         self.prev_action = [0.0, 0.0]
             #         print("NOT RECEIVING ACTION OTHER THAN 0, exiting")
             #         exit()
-            print(f"PREV ACTION: {self.prev_action}")
-            self.node.get_logger().debug(f"PREV ACTION: {self.prev_action}")
-            self.node.get_logger().debug('Sending action and getting state...')
+            # print(f"PREV ACTION: {self.prev_action}")
+            self.node.get_logger().info(f"PREV ACTION: {self.prev_action}")
+            self.node.get_logger().info('Sending action and getting state...')
             self.rosbridge.send_action(self.prev_action)
             return self.rosbridge.get_state()
         except Exception as e:
